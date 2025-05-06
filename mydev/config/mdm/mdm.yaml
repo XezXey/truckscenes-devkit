@@ -5,6 +5,7 @@ model:
     name: 'mdm'
 
 training:
+    batch_size: 8
     save_name: 'mdm'
     save_ckpt: './model_checkpoints/mdm/'
     visualization: './training_visualization/mdm'

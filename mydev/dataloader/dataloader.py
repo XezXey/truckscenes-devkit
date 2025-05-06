@@ -2,6 +2,7 @@ import numpy as np
 import torch as th
 from torch.utils.data import Dataset
 from truckscenes import TruckScenes
+from pyquaternion import Quaternion
 import os
 from PIL import Image
 from truckscenes.utils.data_classes import LidarPointCloud, RadarPointCloud
@@ -32,24 +33,25 @@ def get_truckscenes_dataset(cfg, deterministic=False):
     
     print(trucksc.scene)
     if deterministic:
-        ts_loader = th.utils.data.DataLoader(
+        ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
-            batch_size=1,
+            batch_size=cfg.training.batch_size,
+            collate_fn=ts_dataset.collate_fn,
             shuffle=False,
-            num_workers=0,
+            num_workers=2,
             pin_memory=True,
         )
     else:
-        ts_loader = th.utils.data.DataLoader(
+        ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
-            batch_size=cfg.train.batch_size,
+            batch_size=cfg.training.batch_size,
+            collate_fn=ts_dataset.collate_fn,
             shuffle=True,
-            num_workers=0,
+            num_workers=2,
             pin_memory=True,
         )
     
-    return ts_loader, ts_dataset
-    exit()
+    return ts_dataloader, ts_dataset
     
     
 class TruckScenesDataset(Dataset):
@@ -68,7 +70,8 @@ class TruckScenesDataset(Dataset):
         self.scene = trucksc.scene  # List of scenes
         self.sample_token = cfg.dataset.sample_token
         self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
-        self.__getitem__(0)
+        self.padding_value = -1000
+        # self.__getitem__(0)
         
     def __len__(self):
         return len(self.scene)
@@ -85,5 +88,83 @@ class TruckScenesDataset(Dataset):
         # Load the point cloud
         pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, intensity
         # Load the camera image
-        cam_img = Image.open(os.path.join(self.trucksc.dataroot, cam['filename']))  # HxWxC
+        cam_img = np.array(Image.open(os.path.join(self.trucksc.dataroot, cam['filename'])))  # HxWxC
+    
+        # Load the transformation matrix
+        sensor2ego_record = self.trucksc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
+        cam2ego_record = self.trucksc.get('calibrated_sensor', cam['calibrated_sensor_token'])
+        ego2world = self.trucksc.get('ego_pose', pointsensor['ego_pose_token'])
         
+        cam_dict = {
+            'sensor2ego': {
+                'R': Quaternion(sensor2ego_record['rotation']).rotation_matrix,
+                'T': np.array(sensor2ego_record['translation'])
+            },
+            'ego2global': {
+                'R': Quaternion(cam2ego_record['rotation']).rotation_matrix,
+                'T': np.array(cam2ego_record['translation'])
+            },
+            'ego2world': {
+                'R': Quaternion(ego2world['rotation']).rotation_matrix,
+                'T': np.array(ego2world['translation'])
+            }
+        }
+        # print("[#] pc shape: ", pc.points.shape)
+        # print("[#] cam_img shape: ", cam_img.size)
+        
+        return pc.points.transpose(1, 0), cam_img, cam_dict
+
+    def collate_fn(self, batch):
+        pc, img, cam_dict = map(list, zip(*batch))
+        max_len = max([pc[i].shape[0] for i in range(len(pc))])
+        if max_len > self.cfg.training.max_pc_len:
+            max_len = self.cfg.training.max_pc_len
+            
+        #TODO: This can be randomly sampled from start=[0, max_len - len(pc[i])] to start + len(pc[i])
+        pc = [th.from_numpy(pc[i][:max_len, :]).float() for i in range(len(pc))]
+        pc_tensor = th.nn.utils.rnn.pad_sequence(pc, batch_first=True, padding_value=self.padding_value)
+        
+        img_tensor = th.stack([th.from_numpy(img[i].transpose(2, 0, 1)).float() for i in range(len(img))], dim=0)
+
+        #TODO: Making the cam_dict into a padded tensor
+        # 1. Rotation matrix [3x3] -> [BxTx3x3] using np.eye(3)
+        # 2. Translation vector [3] -> [BxTx3] using np.zeros(3)
+        out_cam_dict = {
+            'sensor2ego': {
+                'R': [],
+                'T': []
+            },
+            'ego2global': {
+                'R': [],
+                'T': []
+            },
+            'ego2world': {
+                'R': [],
+                'T': []
+            }
+        }
+        for i in range(len(cam_dict)):
+            for key in cam_dict[i].keys():
+                R = cam_dict[i][key]['R'][None, None, ...]   # 1x1x3x3
+                T = cam_dict[i][key]['T'][None, None, ...]   # 1x1x3
+                R = th.from_numpy(R).float()
+                T = th.from_numpy(T).float()
+                R = th.repeat_interleave(R, max_len, dim=1)
+                T = th.repeat_interleave(T, max_len, dim=1)
+                out_cam_dict[key]['R'].append(R)
+                out_cam_dict[key]['T'].append(T)
+            
+        for key in out_cam_dict.keys():
+            out_cam_dict[key]['R'] = th.cat(out_cam_dict[key]['R'], dim=0)
+            out_cam_dict[key]['T'] = th.cat(out_cam_dict[key]['T'], dim=0)
+            # print(key, out_cam_dict[key]['R'].shape, out_cam_dict[key]['T'].shape)
+    
+        return {
+            'pc': pc_tensor,
+            'img': img_tensor,
+            'cam_dict': out_cam_dict
+        }
+            
+            
+            
+                    

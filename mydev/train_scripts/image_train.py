@@ -24,8 +24,11 @@ if __name__ == "__main__":
     os.environ['WANDB_MODE'] = logger.run_mode
     wandb_logger = WandbLogger(project=logger.project_name, save_dir=logger.dir, tags=logger.tags, name=logger.run_name, notes=logger.notes)
     
-    get_truckscenes_dataset(
+    train_dataloader, train_dataset = get_truckscenes_dataset(
         cfg=cfg,
     )
+    for i, data in enumerate(train_dataloader):
+        
+        print("MINT")
     
     

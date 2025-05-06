@@ -24,7 +24,8 @@ cfg.model.name = 'default_model'
 # Options for training
 # ---------------------------------------------------------------------------- #
 cfg.training = CN()
-cfg.training.batch_size = 32
+cfg.training.max_pc_len = 128
+cfg.training.batch_size = 8
 cfg.training.max_epochs = int(1e17)
 cfg.training.accelerator = 'gpu'
 cfg.training.lr = 0.001
