@@ -1,0 +1,24 @@
+name: 'Radar Pointcloud Reconstruction'
+device: 'cuda'
+
+model: 
+    name: 'mdm'
+
+training:
+    save_name: 'mdm'
+    save_ckpt: './model_checkpoints/mdm/'
+    visualization: './training_visualization/mdm'
+    eval_interval: 5000
+    save_interval: 5000
+    save_ema_interval: 5000
+    lr: 0.0001
+
+dataset:
+    sample_token: 'first_sample_token'
+
+logging:
+    log_interval: 10
+    visualize_log_interval: 500
+    wandb_logger:
+        run_name: 'ManTruck - MDM'
+        tags: ['transformers']
