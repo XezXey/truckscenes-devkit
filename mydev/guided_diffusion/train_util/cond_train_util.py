@@ -98,7 +98,7 @@ class TrainLoop(LightningModule):
         self.diffusion = diffusion
 
         # Data
-        self.ball_dataset = train_dataset
+        self.train_dataset = train_dataset
         self.train_loader = train_dataloader
 
         # Other config
@@ -269,27 +269,18 @@ class TrainLoop(LightningModule):
                 x=cond.float(), 
                 emb=None,
             )
-            # Override the condition and re-create cond_params
-            if self.cfg.condition_model.override_cond != "":
-                cond[self.cfg.condition_model.override_cond] = out_cond
-                tmp = []
-                for p in self.cfg.trajectory_model.cond_selector:
-                    tmp.append(cond[p])
-                cond[''] = th.cat(tmp, dim=-1)
-            else: raise NotImplementedError
-        return cond
+        return out_cond
 
     def prepare_cond(self, cond):
-        if self.cfg.trajectory_model.dpm_conditioning:
-            cond['dpm_condition'] = cond['traj_condition']
-        else: cond['dpm_condition'] = None
-        return cond
+        return {'cond':cond}
     
     def forward_backward(self, dat, cond):
-
+        '''
+        dat : the pointcloud data in BxTx3
+        '''
         t, weights = self.schedule_sampler.sample(dat.shape[0], self.device)
         # Expand dims for broadcasting sicne we also have timestep dims e.g. (B, T, #features)
-        noise = th.randn_like(dat)
+        noise = th.randn_like(dat)  # 
         # print(noise.shape, noise, dat.shape, dat)
         
         cond = self.forward_cond_network(cond)
@@ -298,13 +289,13 @@ class TrainLoop(LightningModule):
         # Losses
         model_compute_losses = functools.partial(
             self.diffusion.training_losses,
-            self.model_dict[self.cfg.trajectory_model.name],
+            self.model_dict[self.cfg.pointcloud_model.name],
             dat,
             t,
             noise=noise,
             model_kwargs=cond,
             cfg=self.cfg,
-            dataset=self.ball_dataset
+            dataset=self.train_dataset
         )
         model_losses, _ = model_compute_losses()
 
@@ -318,7 +309,7 @@ class TrainLoop(LightningModule):
         self.manual_backward(loss)
         if self.step % self.log_interval:
             self.log_loss_dict(
-                self.diffusion, t, {k: v * weights for k, v in model_losses.items()}, module=self.cfg.trajectory_model.name,
+                self.diffusion, t, {k: v * weights for k, v in model_losses.items()}, module=self.cfg.pointcloud_model.name,
             )
 
     @rank_zero_only
@@ -381,77 +372,49 @@ class TrainLoop(LightningModule):
 
         step_ = float(self.step + self.resume_step)
 
-        n = self.cfg.train.n_sampling
-        if self.cfg.train.same_sampling:
-            # batch here is a tuple of (dat, cond); thus used batch[0], batch[1] here
-            testing_trajectory = [self.ball_dataset.__getsingle__(i) for i in range(n)]
-        else:
-            testing_trajectory = [self.ball_dataset.__getsingle__(i) for i in np.random.randint(0, self.ball_dataset.__len__(), n)]
+        #TODO: Back to normal sampling
+        # n = self.cfg.training.n_sampling
+        # if self.cfg.training.same_sampling:
+        #     # batch here is a tuple of (dat, cond); thus used batch[0], batch[1] here
+        #     testing_scene = [self.train_dataset.__getitem__(i) for i in range(n)]
+        # else:
+        #     testing_scene = [self.train_dataset.__getitem__(i) for i in np.random.randint(0, self.train_dataset.__len__(), n)]
             
-        prediction = []
+        pred = []
         gt = []
-        for i in tqdm.tqdm(range(len(testing_trajectory))):
-            # Full trajectory sampling
-            trajectory = th.tensor(testing_trajectory[i]['traj_3d_raw'][None, ...]).cuda()
-            trajectory_model_input = th.tensor(testing_trajectory[i]['traj_model_input'][None, ...]).cuda()
-            reconstruction_info = testing_trajectory[i]['reconstruction_info']
-            cond = {'traj_condition' : th.tensor(testing_trajectory[i]['traj_condition'][None, ...]).cuda()}
-            # Some preprocessing on conditions
-            cond = self.forward_cond_network(cond)
-            cond = self.prepare_cond(cond)
-            # 1. Overlapped Sampling
-            pred_overlap, _ = sampling_util.overlap_sampling(trajectory=trajectory_model_input,
-                                                        cond=cond, 
-                                                        model=sampling_model_dict[self.cfg.trajectory_model.name], 
-                                                        cfg=self.cfg,
-                                                        sample_fn=self.diffusion.p_sample_loop,
-                                                        # sample_fn=self.diffusion.ddim_sample_loop,
-                                                        device=self.device,
-                                                        dataset=self.ball_dataset,
-                                                    )
-            pred_overlap = pred_overlap[None, ...]
-            if self.cfg.trajectory_model.out_prediction == ['y']:
-                output = utils_transform.reconstruct(height=pred_overlap, 
-                                                     recon_dict=reconstruction_info, 
-                                                     use_canonicalize=self.cfg.trajectory_model.use_canonicalize,)
-            elif self.cfg.trajectory_model.out_prediction == ['x', 'y', 'z']:
-                output = pred_overlap
-            else: raise NotImplementedError("Only \"y\" or \"x, y, z\"")
-            assert trajectory.shape == output.shape
-            output = output.cpu().float()
-            prediction.append(output)
-            gt.append(trajectory.type_as(output))
-        
-        # Logging Trajectory
-        # fig = vis_util.plot_border()
-        fig3d = go.Figure()
-        fig2d_axis = make_subplots(rows=3, cols=1)
-        for i in range(n):
-            # Ground Truth & Predicted Trajectory on 3D
-            fig3d = vis_util.plot_3d(gt[i], c='rgb(0, 0, 255)', fig=fig3d, prefix=f'gt-{i}')
-            fig3d = vis_util.plot_3d(prediction[i], c='rgb(255, 0, 0)', fig=fig3d, prefix=f'pred-{i}')
-            fig3d = vis_util.plot_ray(dat=testing_trajectory[i]['reconstruction_info'], id=i, fig=fig3d)
-            # Ground Truth & Predicted Trajectory on 2D
-            fig2d_axis = vis_util.plot_2d(gt[i], c='rgb(0, 0, 255)', fig=fig2d_axis, prefix=f'gt-{i}')
-            fig2d_axis = vis_util.plot_2d(prediction[i], c='rgb(255, 0, 0)', fig=fig2d_axis, prefix=f'pred-{i}')
+        for i, batch in enumerate(self.train_loader):
+            # batch = self.train_loader.__getitem__(i)
+            pc = batch['pc'].cuda()
+            img = batch['img'].cuda()
+            cond = self.forward_cond_network(cond=img)
+            cond = self.prepare_cond(cond=cond)
             
-        
-        self.trainer.logger.experiment.log({
-            f"Trajectory 3D - {sampling_model}": wandb.Html(plotly.io.to_html(fig3d))
-        }, step = int((step_ + 1) * self.n_gpus))
-        
-        self.trainer.logger.experiment.log({
-            f"Trajectory 2D - {sampling_model}": wandb.Html(plotly.io.to_html(fig2d_axis))
-        }, step = int((step_ + 1) * self.n_gpus))
-        
-        # Compute MSE
-        x_error, y_error, z_error, trajectory_error = compute_mse(gt=th.cat(gt, dim=1), pred=th.cat(prediction, dim=1))
-        self.log(f'MSELoss/{sampling_model}/Trajectory', trajectory_error)
-        self.log(f'MSELoss/{sampling_model}/X', x_error)
-        self.log(f'MSELoss/{sampling_model}/Y', y_error)
-        self.log(f'MSELoss/{sampling_model}/Z', z_error)
-        
-                                                                              
+            # print("pc shape: ", pc.shape)
+            # print("img shape: ", img.shape)
+            # print("cond shape: ", cond['cond'].shape)
+
+            with th.no_grad():
+                samples, _ = self.diffusion.p_sample_loop(
+                    sampling_model_dict[self.cfg.pointcloud_model.name],
+                    # shape=pc.shape, # B x T x 3
+                    shape=pc.shape,
+                    noise=th.randn_like(pc).cuda(),
+                    # clip_denoised=True,
+                    clip_denoised=False,
+                    model_kwargs=cond,
+                    progress=True,
+                )
+            # print(samples.shape)    # B x T x 3
+            pred.append(samples)
+            gt.append(pc)
+        # Calculate per samples L2 loss
+        pred = th.cat(pred, dim=0)
+        gt = th.cat(gt, dim=0)
+        mse = th.mean(th.square(pred - gt), dim=(1, 2))
+        rmse = th.sqrt(mse)
+        # Log the distance to wandb as a plot for each sample
+        self.log(f"sampling/{sampling_model}-rmse", rmse.mean(),)
+        self.log(f"sampling/{sampling_model}-mse", mse.mean(),)
         # # Save memory!
         self.train_mode(model=sampling_model_dict)
 

@@ -260,10 +260,7 @@ class GaussianDiffusion:
         B, C = x.shape[:2]
         assert t.shape == (B,)
         
-        if model_kwargs['dpm_condition'] is not None:
-            output = model(th.cat((x, model_kwargs['dpm_condition']), dim=-1).float(), self._scale_timesteps(t).long(), **model_kwargs)
-        else:
-            output = model(x.float(), self._scale_timesteps(t).long(), **model_kwargs)
+        output = model(x.float(), self._scale_timesteps(t).long(), **model_kwargs)
         model_output = output["output"]
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
@@ -489,7 +486,7 @@ class GaussianDiffusion:
             progress=progress,
         ):
             final = sample
-        return final["sample"]
+        return final["sample"], None
 
     def p_sample_loop_progressive(
         self,
@@ -864,19 +861,8 @@ class GaussianDiffusion:
         terms = {}
         if self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
             #NOTE: Forward pass happens here...    
-            if model_kwargs['dpm_condition'] is not None:
-                output = model(th.cat((x_t, model_kwargs['dpm_condition']), dim=-1).float(), self._scale_timesteps(t).long(), **model_kwargs)
-            else:
-                output = model(x_t.float(), self._scale_timesteps(t).long(), **model_kwargs)
+            output = model(x_t.float(), self._scale_timesteps(t).long(), **model_kwargs)
             model_output = output['output']
-            
-            # Prediction space
-            if cfg.trajectory_model.pred_space == 'absolute+relative':
-                model_output = th.cumsum(model_output, dim=1)
-            elif cfg.trajectory_model.pred_space == 'absolute':
-                pass
-            else:
-                raise NotImplementedError
             
             target = {
                 ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
@@ -892,25 +878,6 @@ class GaussianDiffusion:
             else:
                 terms["loss"] = terms["mse"]
             
-            def aux_loss(x_start, model_output):
-                # For computing the auxiliary loss or regularizor (e.g. gravity loss)
-                ################
-                # Gravity Loss # 
-                ################
-                if cfg.trajectory_model.normalization or cfg.trajectory_model.minmax_normalization:
-                    gt = dataset.inv_transform(x_start.clone())
-                    model_output = dataset.inv_transform(model_output.clone())
-                else: 
-                    gt = x_start.clone()
-                    
-                terms["g_loss"] = gravity_loss(gt=gt, 
-                                            pred=model_output, 
-                                            fps=cfg.dataset.fps,
-                                        )
-                if cfg.loss.gravity_loss:
-                    terms["loss"] += terms["g_loss"] * cfg.loss.gravity_loss_weight 
-                return terms
-            terms = aux_loss(x_start, model_output)
         else:
             raise NotImplementedError(self.loss_type)
 

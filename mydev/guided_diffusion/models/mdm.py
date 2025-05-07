@@ -58,16 +58,15 @@ class MDM(nn.Module):
         timesteps: [batch_size, nframes] (input)
         """
         # Condition Embedding
-        sparse_emb = kwargs['traj_condition']
-        sparse_emb = self.cond_proj_layer(sparse_emb)   # [bs, T, d]
+        cond_emb = kwargs['cond']
+        cond_emb_proj = self.cond_proj_layer(cond_emb)   # [bs, T, d]
         # Time Embedding
-        emb = self.time_embed(timesteps)
+        t_emb = self.time_embed(timesteps)
         # print("After emb time : ", emb.shape)
         # emb = emb.unsqueeze(dim=1)  #NOTE: [bs, d] -> [bs, 1, d] since we need to add the #n frames dim for timesteps
         # print("Expand T-dim of emb time : ", emb.shape)
         
-        emb = sparse_emb + emb  # [bs, T, d]
-        emb = self.cond_time_combined(emb) # [bs, 1, T]
+        emb = cond_emb_proj.unsqueeze(1) + t_emb  # [bs, 1, d]
         # print("timecomb emb : ", emb.shape)
         x = self.input_process(x)
         # print("x : ", x.shape)

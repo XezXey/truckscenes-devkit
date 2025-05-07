@@ -29,11 +29,12 @@ def get_truckscenes_dataset(cfg, deterministic=True):
     dataroot = cfg.dataset.dataroot
     trucksc = TruckScenes(version=version, dataroot=dataroot, verbose=True)
     ts_dataset = TruckScenesDataset(trucksc, cfg)
+    batch_size = 1 if cfg.training.single_sample_training else cfg.training.batch_size
     
     if deterministic:
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
-            batch_size=cfg.training.batch_size,
+            batch_size=batch_size,
             collate_fn=ts_dataset.collate_fn,
             shuffle=False,
             num_workers=2,
@@ -42,7 +43,7 @@ def get_truckscenes_dataset(cfg, deterministic=True):
     else:
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
-            batch_size=cfg.training.batch_size,
+            batch_size=batch_size,
             collate_fn=ts_dataset.collate_fn,
             shuffle=True,
             num_workers=2,
@@ -65,10 +66,14 @@ class TruckScenesDataset(Dataset):
     def __init__(self, trucksc, cfg):
         self.trucksc = trucksc
         self.cfg = cfg
-        self.scene = trucksc.scene  # List of scenes
+        if cfg.training.single_sample_training:
+            self.scene = trucksc.scene[:1]
+        else:
+            self.scene = trucksc.scene  # List of scenes
         self.sample_token = cfg.dataset.sample_token
         self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
         self.padding_value = -1000
+        self.resize_ratio = cfg.condition_model.resize_ratio
         # self.__getitem__(0)
         
     def __len__(self):
@@ -86,8 +91,15 @@ class TruckScenesDataset(Dataset):
         
         # Load the point cloud
         pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, intensity
+        pc_pts = pc.points.transpose(1, 0)
+        pc_pts = pc_pts[:, :3]  # Only keep x, y, z
         # Load the camera image
-        cam_img = np.array(Image.open(os.path.join(self.trucksc.dataroot, cam['filename'])))  # HxWxC
+        cam_img = Image.open(os.path.join(self.trucksc.dataroot, cam['filename']))  # HxWxC
+        orig_w, orig_h = cam_img.size   # PIL’s .size is (width, height)
+        new_w = int(orig_w  / self.resize_ratio)
+        new_h = int(orig_h  / self.resize_ratio)
+        cam_img = cam_img.resize((new_w, new_h), Image.LANCZOS)
+        cam_img = np.array(cam_img)
     
         # Load the transformation matrix
         sensor2ego_record = self.trucksc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
@@ -111,7 +123,7 @@ class TruckScenesDataset(Dataset):
         # print("[#] pc shape: ", pc.points.shape)
         # print("[#] cam_img shape: ", cam_img.size)
         
-        return pc.points.transpose(1, 0), cam_img, cam_dict
+        return pc_pts, cam_img, cam_dict
         # return np.random.rand(10, 3, 256, 256)
 
     def collate_fn(self, batch):
@@ -156,7 +168,7 @@ class TruckScenesDataset(Dataset):
         for key in out_cam_dict.keys():
             out_cam_dict[key]['R'] = th.from_numpy(np.concatenate(out_cam_dict[key]['R'], axis=0))
             out_cam_dict[key]['T'] = th.from_numpy(np.concatenate(out_cam_dict[key]['T'], axis=0))
-            print(key, out_cam_dict[key]['R'].shape, out_cam_dict[key]['T'].shape)
+            # print(key, out_cam_dict[key]['R'].shape, out_cam_dict[key]['T'].shape)
     
         return {
             'pc': th.clone(pc_tensor),
