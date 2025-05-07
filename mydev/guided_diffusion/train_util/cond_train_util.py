@@ -11,12 +11,11 @@ import tqdm
 import torch.distributed as dist
 from torchvision.utils import make_grid
 from torch.optim import AdamW
-from pytorch_lightning import LightningModule
-from pytorch_lightning.strategies import DDPStrategy
+# from pytorch_lightning import LightningModule
+from lightning import LightningModule
+from lightning.pytorch.utilities import rank_zero_only
 
-from pytorch_lightning.utilities import rank_zero_only
-
-import pytorch_lightning as pl
+import lightning as pl
 import wandb
 
 from guided_diffusion import tensor_util#, vis_util, sampling_util
@@ -38,7 +37,7 @@ class ModelWrapper(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.model_dict = model_dict
-        self.trajectory_model = model_dict['pointcloud_model']
+        self.pointcloud_model = model_dict['pointcloud_model']
         if self.cfg.condition_model.apply:
             self.condition_model = model_dict['condition_model']
 
@@ -70,17 +69,6 @@ class TrainLoop(LightningModule):
         self.num_nodes = self.cfg.training.num_nodes
         self.t_logger = t_logger
         self.logger_mode = self.cfg.logging.logger
-        self.pl_trainer = pl.Trainer(
-            devices=self.n_gpus,
-            num_nodes=self.num_nodes,
-            logger=self.t_logger,
-            log_every_n_steps=self.cfg.logging.log_interval,
-            max_epochs=int(cfg.training.max_epochs),
-            accelerator=cfg.training.accelerator,
-            profiler='simple',
-            strategy=DDPStrategy(find_unused_parameters=self.cfg.training.find_unused_parameters),
-            detect_anomaly=True,
-            )
         self.automatic_optimization = False # Manual optimization flow
 
         # Model
@@ -188,12 +176,11 @@ class TrainLoop(LightningModule):
 
         return ema_params
 
-    def run(self):
-        # Driven code
-        # Logging for first time
-        if not self.resume_checkpoint:
-            self.save()
-        self.pl_trainer.fit(self, train_dataloaders=self.train_dataloader)
+    # def run(self):
+    #     # Driven code
+    #     # Logging for first time
+    #     if not self.resume_checkpoint:
+    #         self.save()
 
     def run_step(self, dat, cond):
         '''

@@ -12,7 +12,7 @@ SENSOR_PAIR_ID = {
     'RADAR_RIGHT_FRONT': 'CAMERA_RIGHT_FRONT',
 }
 
-def get_truckscenes_dataset(cfg, deterministic=False):
+def get_truckscenes_dataset(cfg, deterministic=True):
     """
     Load the TruckScenes dataset.
     
@@ -34,7 +34,7 @@ def get_truckscenes_dataset(cfg, deterministic=False):
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
             batch_size=cfg.training.batch_size,
-            collate_fn=ts_dataset.collate_fn,
+            # collate_fn=ts_dataset.collate_fn,
             shuffle=False,
             num_workers=2,
             pin_memory=True,
@@ -43,7 +43,7 @@ def get_truckscenes_dataset(cfg, deterministic=False):
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
             batch_size=cfg.training.batch_size,
-            collate_fn=ts_dataset.collate_fn,
+            # collate_fn=ts_dataset.collate_fn,
             shuffle=True,
             num_workers=2,
             pin_memory=True,
@@ -63,18 +63,22 @@ class TruckScenesDataset(Dataset):
     """
     
     def __init__(self, trucksc, cfg):
-        self.trucksc = trucksc
-        self.cfg = cfg
-        self.scene = trucksc.scene  # List of scenes
-        self.sample_token = cfg.dataset.sample_token
-        self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
-        self.padding_value = -1000
+        # self.trucksc = trucksc
+        # self.cfg = cfg
+        # self.scene = trucksc.scene  # List of scenes
+        # self.sample_token = cfg.dataset.sample_token
+        # self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
+        # self.padding_value = -1000
         # self.__getitem__(0)
+        pass
         
     def __len__(self):
-        return len(self.scene)
+        # return len(self.scene)
+        return 10
     
     def __getitem__(self, idx):
+        return th.rand(10)                
+        return np.random.rand(10, 3, 256, 256)
         scene = self.scene[idx]
         sample_record = self.trucksc.get('sample', scene[self.sample_token])
         pointsensor_token = sample_record['data'][self.radar_position]
@@ -94,29 +98,30 @@ class TruckScenesDataset(Dataset):
         ego2world = self.trucksc.get('ego_pose', pointsensor['ego_pose_token'])
         
         cam_dict = {
-            'sensor2ego': {
-                'R': Quaternion(sensor2ego_record['rotation']).rotation_matrix,
-                'T': np.array(sensor2ego_record['translation'])
-            },
-            'ego2global': {
-                'R': Quaternion(cam2ego_record['rotation']).rotation_matrix,
-                'T': np.array(cam2ego_record['translation'])
-            },
-            'ego2world': {
-                'R': Quaternion(ego2world['rotation']).rotation_matrix,
-                'T': np.array(ego2world['translation'])
-            }
+            # 'sensor2ego': {
+            #     'R': Quaternion(sensor2ego_record['rotation']).rotation_matrix,
+            #     'T': np.array(sensor2ego_record['translation'])
+            # },
+            # 'ego2global': {
+            #     'R': Quaternion(cam2ego_record['rotation']).rotation_matrix,
+            #     'T': np.array(cam2ego_record['translation'])
+            # },
+            # 'ego2world': {
+            #     'R': Quaternion(ego2world['rotation']).rotation_matrix,
+            #     'T': np.array(ego2world['translation'])
+            # }
         }
         # print("[#] pc shape: ", pc.points.shape)
         # print("[#] cam_img shape: ", cam_img.size)
         
-        return pc.points.transpose(1, 0), cam_img, cam_dict
+        # return pc.points.transpose(1, 0), cam_img, cam_dict
+        # return np.random.rand(10, 3, 256, 256)
 
     def collate_fn(self, batch):
         
         return {
-            'pc': th.rand((3, 10, 10, 10)),
-            'img': th.rand((3, 128, 10, 10))
+            'pc': np.array((3, 10, 10, 10)),
+            'img': np.array((3, 128, 10, 10))
         }
         pc, img, cam_dict = map(list, zip(*batch))
         max_len = max([pc[i].shape[0] for i in range(len(pc))])

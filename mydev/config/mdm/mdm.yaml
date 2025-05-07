@@ -9,7 +9,7 @@ condition_model:
     apply: True
 
 training:
-    batch_size: 8
+    batch_size: 2
     save_name: 'mdm'
     save_ckpt: './model_checkpoints/mdm/'
     visualization: './training_visualization/mdm'
@@ -22,7 +22,7 @@ dataset:
     sample_token: 'first_sample_token'
 
 logging:
-    log_interval: 10
+    log_interval: 2
     visualize_log_interval: 500
     wandb_logger:
         run_name: 'ManTruck - MDM'

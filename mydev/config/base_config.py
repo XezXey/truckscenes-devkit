@@ -81,7 +81,7 @@ cfg.training.find_unused_parameters = True
 # Options for loss
 # ---------------------------------------------------------------------------- #
 cfg.logging = CN()
-cfg.logging.log_interval = 50
+cfg.logging.log_interval = 2
 cfg.logging.visualize_log_interval = 1000000
 cfg.logging.logger = 'wandb'
 cfg.logging.wandb_logger = CN()

@@ -105,6 +105,26 @@ class TimestepEmbedder(nn.Module):
         # print("timesteps shape : ", self.sequence_pos_encoder.pe[timesteps].shape)
         return self.time_embed(self.sequence_pos_encoder.pe[timesteps])
  
+# class PositionalEncoding(nn.Module):
+#     def __init__(self, d_model, dropout=0.1, max_len=5000):
+#         super(PositionalEncoding, self).__init__()
+#         self.dropout = nn.Dropout(p=dropout)
+
+#         pe = th.zeros(max_len, d_model)
+#         position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
+#         div_term = th.exp(th.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+#         pe[:, 0::2] = th.sin(position * div_term)
+#         pe[:, 1::2] = th.cos(position * div_term)
+#         pe = pe.unsqueeze(0).transpose(0, 1)
+
+#         self.register_buffer('pe', pe)
+
+#     def forward(self, x):
+#         # not used in the final model
+#         # x = x + self.pe[:x.shape[1]].permute(1, 0, 2)   # since pe is max_len, 1, d_model, we need to permute it to 1, max_len, d_model
+#         x = x + self.pe[:x.shape[0], :]
+#         return self.dropout(x)
+    
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
         super(PositionalEncoding, self).__init__()
@@ -112,17 +132,15 @@ class PositionalEncoding(nn.Module):
 
         pe = th.zeros(max_len, d_model)
         position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
-        div_term = th.exp(th.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        div_term = th.exp(th.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = th.sin(position * div_term)
         pe[:, 1::2] = th.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
-
-        self.register_buffer('pe', pe)
+        
+        self.register_parameter('pe', nn.Parameter(pe, requires_grad=False))
 
     def forward(self, x):
-        # not used in the final model
-        # x = x + self.pe[:x.shape[1]].permute(1, 0, 2)   # since pe is max_len, 1, d_model, we need to permute it to 1, max_len, d_model
-        x = x + self.pe[:x.shape[0], :]
+        x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
     
 
