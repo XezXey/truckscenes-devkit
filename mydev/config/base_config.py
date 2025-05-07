@@ -17,8 +17,38 @@ cfg.device_id = '0'
 # ---------------------------------------------------------------------------- #
 # Options for network architecture
 # ---------------------------------------------------------------------------- #
-cfg.model = CN()
-cfg.model.name = 'default_model'
+# For MDM
+cfg.pointcloud_model = CN()
+cfg.pointcloud_model.arch = 'MDM'
+cfg.pointcloud_model.num_layers = 6
+cfg.pointcloud_model.num_heads = 8
+cfg.pointcloud_model.ff_size = 2048
+cfg.pointcloud_model.model_channels = 512
+cfg.pointcloud_model.in_channels = 3
+cfg.pointcloud_model.out_channels = 3
+cfg.pointcloud_model.dropout = 0.1
+cfg.pointcloud_model.max_pc_len = 128
+
+# Conditioning model (e.g. encoder, feature extractor, etc.)
+cfg.condition_model = CN()
+cfg.condition_model.arch = 'EncoderUNetModelNoTime'
+cfg.condition_model.apply = False 
+cfg.condition_model.image_size = 512
+cfg.condition_model.in_channels = 3
+cfg.condition_model.model_channels = 512
+cfg.condition_model.out_channels = 3
+cfg.condition_model.num_res_blocks = 2
+cfg.condition_model.num_heads = 4
+cfg.condition_model.num_heads_upsample = -1
+cfg.condition_model.num_head_channels = -1
+cfg.condition_model.attention_resolutions = "16,8"
+cfg.condition_model.channel_mult = ""
+cfg.condition_model.dropout = 0.0
+cfg.condition_model.use_checkpoint = False
+cfg.condition_model.use_scale_shift_norm = True
+cfg.condition_model.resblock_updown = False
+cfg.condition_model.use_new_attention_order = False
+cfg.condition_model.pool = 'adaptive'
 
 # ---------------------------------------------------------------------------- #
 # Options for training
@@ -59,6 +89,23 @@ cfg.logging.wandb_logger.resume = None
 # ---------------------------------------------------------------------------- #
 cfg.loss = CN()
 cfg.loss.loss_list = ['all']
+
+# ---------------------------------------------------------------------------- #
+# Options for diffusion
+# ---------------------------------------------------------------------------- #
+cfg.diffusion = CN()
+cfg.diffusion.schedule_sampler = "uniform"
+cfg.diffusion.learn_sigma = False
+cfg.diffusion.diffusion_steps = 1000
+cfg.diffusion.sigma_small = False
+cfg.diffusion.noise_schedule = "linear"
+cfg.diffusion.use_kl = False
+cfg.diffusion.predict_xstart = False
+cfg.diffusion.rescale_timesteps = False
+cfg.diffusion.rescale_learned_sigmas = False
+cfg.diffusion.timestep_respacing = ""
+cfg.diffusion.clip_denoised = True
+
 
 # ---------------------------------------------------------------------------- #
 # Options for Dataset

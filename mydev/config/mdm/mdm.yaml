@@ -1,8 +1,12 @@
 name: 'Radar Pointcloud Reconstruction'
 device: 'cuda'
 
-model: 
-    name: 'mdm'
+pointcloud_model: 
+    arch: 'MDM'
+
+condition_model:
+    arch: 'EncoderUNetModelNoTime'
+    apply: True
 
 training:
     batch_size: 8

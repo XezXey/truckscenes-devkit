@@ -27,7 +27,6 @@ def get_truckscenes_dataset(cfg, deterministic=False):
     
     version = cfg.dataset.version
     dataroot = cfg.dataset.dataroot
-    sample_token = cfg.dataset.sample_token
     trucksc = TruckScenes(version=version, dataroot=dataroot, verbose=True)
     ts_dataset = TruckScenesDataset(trucksc, cfg)
     
@@ -164,7 +163,3 @@ class TruckScenesDataset(Dataset):
             'img': img_tensor,
             'cam_dict': out_cam_dict
         }
-            
-            
-            
-                    
