@@ -12,8 +12,10 @@ import torch.distributed as dist
 from torchvision.utils import make_grid
 from torch.optim import AdamW
 # from pytorch_lightning import LightningModule
+import lightning as L
 from lightning import LightningModule
 from lightning.pytorch.utilities import rank_zero_only
+from lightning.pytorch.strategies import DDPStrategy
 
 import lightning as pl
 import wandb
@@ -69,6 +71,19 @@ class TrainLoop(LightningModule):
         self.num_nodes = self.cfg.training.num_nodes
         self.t_logger = t_logger
         self.logger_mode = self.cfg.logging.logger
+        
+    
+        self.pl_trainer = L.Trainer(
+            devices=cfg.training.n_gpus,
+            num_nodes=cfg.training.num_nodes,
+            logger=t_logger,
+            log_every_n_steps=cfg.logging.log_interval,
+            max_epochs=int(cfg.training.max_epochs),
+            accelerator=cfg.training.accelerator,
+            profiler='simple',
+            strategy=DDPStrategy(find_unused_parameters=cfg.training.find_unused_parameters),
+            # detect_anomaly=True,
+            )
         self.automatic_optimization = False # Manual optimization flow
 
         # Model
@@ -84,7 +99,7 @@ class TrainLoop(LightningModule):
 
         # Data
         self.ball_dataset = train_dataset
-        self.train_dataloader = train_dataloader
+        self.train_loader = train_dataloader
 
         # Other config
         self.batch_size = self.cfg.training.batch_size
@@ -176,11 +191,13 @@ class TrainLoop(LightningModule):
 
         return ema_params
 
-    # def run(self):
-    #     # Driven code
-    #     # Logging for first time
-    #     if not self.resume_checkpoint:
-    #         self.save()
+    def run(self):
+        # Driven code
+        # Logging for first time
+        if not self.resume_checkpoint:
+            self.save()
+        self.pl_trainer.fit(self, train_dataloaders=self.train_loader)
+
 
     def run_step(self, dat, cond):
         '''
@@ -196,9 +213,9 @@ class TrainLoop(LightningModule):
 
     def training_step(self, batch, batch_idx):
         # dat = batch['traj_3d']
-        dat = batch['traj_model_input']
-        cond = batch
-        self.model(trainloop=self, dat=dat, cond=cond)
+        pc = batch['pc']
+        img = batch['img']
+        self.model(trainloop=self, dat=pc, cond=img)
         self.step += 1
     
     @rank_zero_only

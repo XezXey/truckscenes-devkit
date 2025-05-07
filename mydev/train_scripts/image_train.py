@@ -14,8 +14,6 @@ from guided_diffusion.script_util import (
 )
 from guided_diffusion.train_util.cond_train_util import TrainLoop
 from guided_diffusion.train_util.train_dummy_util import get_dummy_model
-# from pytorch_lightning.strategies import DDPStrategy
-# from L.strategies import DDPStrategy
 
 
 
@@ -49,14 +47,10 @@ if __name__ == "__main__":
     os.environ['WANDB_MODE'] = logger.run_mode
     wandb_logger = WandbLogger(project=logger.project_name, save_dir=logger.dir, tags=logger.tags, name=logger.run_name, notes=logger.notes)
     
-    # train_dataloader, train_dataset = get_truckscenes_dataset(
-    #     cfg=cfg,
-    # )
+    train_dataloader, train_dataset = get_truckscenes_dataset(
+        cfg=cfg,
+    )
     
-    train_dataloader, train_dataset = get_random_dataset()
-    
-    # for i, data in enumerate(train_dataloader):
-    #     print("MINT")
     
     train_loop = TrainLoop(
         model=list(model.values()),
@@ -69,21 +63,6 @@ if __name__ == "__main__":
         schedule_sampler=schedule_sampler,
     )
     
-    pl_trainer = L.Trainer(
-        devices=cfg.training.n_gpus,
-        num_nodes=cfg.training.num_nodes,
-        logger=wandb_logger,
-        log_every_n_steps=cfg.logging.log_interval,
-        max_epochs=int(cfg.training.max_epochs),
-        accelerator=cfg.training.accelerator,
-        profiler='simple',
-        # strategy=DDPStrategy(find_unused_parameters=cfg.training.find_unused_parameters),
-        strategy='ddp',
-        # detect_anomaly=True,
-        )
-    
-    # pl_trainer = L.Trainer(limit_train_batches=100, max_epochs=1)
-    # pl_trainer.fit(model=get_dummy_model(), train_dataloaders=train_dataloader)
-    pl_trainer.fit(model=train_loop, train_dataloaders=train_dataloader)
+    train_loop.run()
     
     

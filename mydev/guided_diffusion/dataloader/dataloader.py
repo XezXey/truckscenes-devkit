@@ -34,7 +34,7 @@ def get_truckscenes_dataset(cfg, deterministic=True):
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
             batch_size=cfg.training.batch_size,
-            # collate_fn=ts_dataset.collate_fn,
+            collate_fn=ts_dataset.collate_fn,
             shuffle=False,
             num_workers=2,
             pin_memory=True,
@@ -43,7 +43,7 @@ def get_truckscenes_dataset(cfg, deterministic=True):
         ts_dataloader = th.utils.data.DataLoader(
             ts_dataset,
             batch_size=cfg.training.batch_size,
-            # collate_fn=ts_dataset.collate_fn,
+            collate_fn=ts_dataset.collate_fn,
             shuffle=True,
             num_workers=2,
             pin_memory=True,
@@ -63,22 +63,19 @@ class TruckScenesDataset(Dataset):
     """
     
     def __init__(self, trucksc, cfg):
-        # self.trucksc = trucksc
-        # self.cfg = cfg
-        # self.scene = trucksc.scene  # List of scenes
-        # self.sample_token = cfg.dataset.sample_token
-        # self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
-        # self.padding_value = -1000
+        self.trucksc = trucksc
+        self.cfg = cfg
+        self.scene = trucksc.scene  # List of scenes
+        self.sample_token = cfg.dataset.sample_token
+        self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
+        self.padding_value = -1000
         # self.__getitem__(0)
-        pass
         
     def __len__(self):
-        # return len(self.scene)
-        return 10
+        return len(self.scene)
+        # return 10
     
     def __getitem__(self, idx):
-        return th.rand(10)                
-        return np.random.rand(10, 3, 256, 256)
         scene = self.scene[idx]
         sample_record = self.trucksc.get('sample', scene[self.sample_token])
         pointsensor_token = sample_record['data'][self.radar_position]
@@ -98,31 +95,26 @@ class TruckScenesDataset(Dataset):
         ego2world = self.trucksc.get('ego_pose', pointsensor['ego_pose_token'])
         
         cam_dict = {
-            # 'sensor2ego': {
-            #     'R': Quaternion(sensor2ego_record['rotation']).rotation_matrix,
-            #     'T': np.array(sensor2ego_record['translation'])
-            # },
-            # 'ego2global': {
-            #     'R': Quaternion(cam2ego_record['rotation']).rotation_matrix,
-            #     'T': np.array(cam2ego_record['translation'])
-            # },
-            # 'ego2world': {
-            #     'R': Quaternion(ego2world['rotation']).rotation_matrix,
-            #     'T': np.array(ego2world['translation'])
-            # }
+            'sensor2ego': {
+                'R': Quaternion(sensor2ego_record['rotation']).rotation_matrix,
+                'T': np.array(sensor2ego_record['translation'])
+            },
+            'ego2global': {
+                'R': Quaternion(cam2ego_record['rotation']).rotation_matrix,
+                'T': np.array(cam2ego_record['translation'])
+            },
+            'ego2world': {
+                'R': Quaternion(ego2world['rotation']).rotation_matrix,
+                'T': np.array(ego2world['translation'])
+            }
         }
         # print("[#] pc shape: ", pc.points.shape)
         # print("[#] cam_img shape: ", cam_img.size)
         
-        # return pc.points.transpose(1, 0), cam_img, cam_dict
+        return pc.points.transpose(1, 0), cam_img, cam_dict
         # return np.random.rand(10, 3, 256, 256)
 
     def collate_fn(self, batch):
-        
-        return {
-            'pc': np.array((3, 10, 10, 10)),
-            'img': np.array((3, 128, 10, 10))
-        }
         pc, img, cam_dict = map(list, zip(*batch))
         max_len = max([pc[i].shape[0] for i in range(len(pc))])
         if max_len > self.cfg.training.max_pc_len:
@@ -152,23 +144,23 @@ class TruckScenesDataset(Dataset):
                 'T': []
             }
         }
-        # for i in range(len(cam_dict)):
-        #     for key in cam_dict[i].keys():
-        #         R = cam_dict[i][key]['R'][None, None, ...]   # 1x1x3x3
-        #         T = cam_dict[i][key]['T'][None, None, ...]   # 1x1x3
-        #         R = np.repeat(R, (1, max_len, 1, 1))
-        #         T = np.repeat(T, (1, max_len, 1))
-        #         out_cam_dict[key]['R'].append(R)
-        #         out_cam_dict[key]['T'].append(T)
+        for i in range(len(cam_dict)):
+            for key in cam_dict[i].keys():
+                R = cam_dict[i][key]['R'][None, None, ...]   # 1x1x3x3
+                T = cam_dict[i][key]['T'][None, None, ...]   # 1x1x3
+                R = np.repeat(R, repeats=max_len, axis=1)
+                T = np.repeat(T, repeats=max_len, axis=1)
+                out_cam_dict[key]['R'].append(R)
+                out_cam_dict[key]['T'].append(T)
             
-        # for key in out_cam_dict.keys():
-        #     out_cam_dict[key]['R'] = th.from_numpy(np.concatenate(out_cam_dict[key]['R'], axis=0))
-        #     out_cam_dict[key]['T'] = th.from_numpy(np.concatenate(out_cam_dict[key]['T'], axis=0))
-            # print(key, out_cam_dict[key]['R'].shape, out_cam_dict[key]['T'].shape)
+        for key in out_cam_dict.keys():
+            out_cam_dict[key]['R'] = th.from_numpy(np.concatenate(out_cam_dict[key]['R'], axis=0))
+            out_cam_dict[key]['T'] = th.from_numpy(np.concatenate(out_cam_dict[key]['T'], axis=0))
+            print(key, out_cam_dict[key]['R'].shape, out_cam_dict[key]['T'].shape)
     
         return {
             'pc': th.clone(pc_tensor),
             'img': th.clone(img_tensor),
             'mask': th.clone(mask_tensor),
-            # 'cam_dict': out_cam_dict
+            'cam_dict': out_cam_dict
         }
