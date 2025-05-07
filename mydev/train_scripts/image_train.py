@@ -2,7 +2,7 @@ import torch as th
 import pytorch_lightning as pl
 import sys, os, tqdm
 sys.path.append("/home/mint/Dev/RadarPointcloud/truckscenes-devkit/mydev/")
-from dataloader.dataloader import get_truckscenes_dataset
+from guided_diffusion.dataloader.dataloader import get_truckscenes_dataset
 from config.base_config import parse_args
 from pytorch_lightning.loggers import WandbLogger
 from guided_diffusion.resample import create_named_schedule_sampler
@@ -10,6 +10,8 @@ from guided_diffusion.script_util import (
     create_model_and_diffusion,
     seed_all,
 )
+from guided_diffusion.train_util.cond_train_util import TrainLoop
+
 
 
 seed_all(25091995)
@@ -23,6 +25,7 @@ if __name__ == "__main__":
         exit()
     cfg.training.save_ckpt = os.path.join(cfg.training.save_ckpt, cfg.training.save_name)
     cfg.training.visualization = os.path.join(cfg.training.visualization, cfg.training.save_name)
+    cfg.loggging.wandb_logger.dir = os.path.join(cfg.loggging.wandb_logger.dir, cfg.training.save_name)
     
     # Init diffusion, model and schedule sampler
     print("[#] Creating model and diffusion...")
@@ -43,8 +46,21 @@ if __name__ == "__main__":
     train_dataloader, train_dataset = get_truckscenes_dataset(
         cfg=cfg,
     )
+    
     for i, data in enumerate(train_dataloader):
-        
         print("MINT")
+    
+    train_loop = TrainLoop(
+        model=list(model.values()),
+        name=list(model.keys()),
+        diffusion=diffusion,
+        train_dataloader=train_dataloader,
+        train_dataset=train_dataset,
+        cfg=cfg,
+        t_logger=wandb_logger,
+        schedule_sampler=schedule_sampler,
+    )
+    
+    train_loop.run()
     
     

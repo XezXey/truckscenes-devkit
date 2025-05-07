@@ -33,7 +33,7 @@ def create_pointcloud_model(cfg, all_cfg=None):
             num_heads=cfg.num_heads,
             ff_size=cfg.ff_size,
             num_layers=cfg.num_layers,
-            condition_dim=10,   # TODO: Change into the condition dimension output from EncoderUNetModelNoTime
+            condition_dim=all_cfg.condition_model.out_channels,   # NOTE: cond_dim = EncoderUNetModelNoTime's out_channels
             model_channels=cfg.model_channels,
             dropout=cfg.dropout,
             cfg=cfg,

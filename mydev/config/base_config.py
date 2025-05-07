@@ -19,6 +19,7 @@ cfg.device_id = '0'
 # ---------------------------------------------------------------------------- #
 # For MDM
 cfg.pointcloud_model = CN()
+cfg.pointcloud_model.name = 'pointcloud_model'
 cfg.pointcloud_model.arch = 'MDM'
 cfg.pointcloud_model.num_layers = 6
 cfg.pointcloud_model.num_heads = 8
@@ -31,12 +32,13 @@ cfg.pointcloud_model.max_pc_len = 128
 
 # Conditioning model (e.g. encoder, feature extractor, etc.)
 cfg.condition_model = CN()
+cfg.condition_model.name = 'condition_model'
 cfg.condition_model.arch = 'EncoderUNetModelNoTime'
 cfg.condition_model.apply = False 
 cfg.condition_model.image_size = 512
 cfg.condition_model.in_channels = 3
-cfg.condition_model.model_channels = 512
-cfg.condition_model.out_channels = 3
+cfg.condition_model.model_channels = 128
+cfg.condition_model.out_channels = 128
 cfg.condition_model.num_res_blocks = 2
 cfg.condition_model.num_heads = 4
 cfg.condition_model.num_heads_upsample = -1
@@ -56,17 +58,24 @@ cfg.condition_model.pool = 'adaptive'
 cfg.training = CN()
 cfg.training.max_pc_len = 128
 cfg.training.batch_size = 8
+cfg.training.n_gpus = 1
+cfg.training.num_nodes = 1
 cfg.training.max_epochs = int(1e17)
 cfg.training.accelerator = 'gpu'
-cfg.training.lr = 0.001
+cfg.training.lr = 1e-4
+cfg.training.lr_anneal_steps = 0.0
+cfg.training.weight_decay = 0.0
 cfg.training.save_ckpt = '../model_checkpoints/'
 cfg.training.load_ckpt = '../model_checkpoints/'
 cfg.training.visualization = '../training_visualization/'
 cfg.training.save_name = None
 cfg.training.save_interval = 5000 # Save model every n iterations
 cfg.training.save_ema_interval = 1000 # Save model every n iterations
+cfg.training.sampling_interval = 1000 # 
 cfg.training.eval_interval = 50 # Evaluate model on validation set every n iterations
 cfg.training.ema_rate = 0.9999
+cfg.training.resume_checkpoint = ""
+cfg.training.find_unused_parameters = True
 
 # ---------------------------------------------------------------------------- #
 # Options for loss
@@ -80,7 +89,7 @@ cfg.logging.wandb_logger.notes = 'Default note...'
 cfg.logging.wandb_logger.project_name = 'Radar Pointcloud Reconstruction'
 cfg.logging.wandb_logger.tags = ['default']
 cfg.logging.wandb_logger.run_name = 'test'
-cfg.logging.wandb_logger.dir = './'
+cfg.logging.wandb_logger.dir = './model_checkpoints'
 cfg.logging.wandb_logger.run_mode = 'run'
 cfg.logging.wandb_logger.resume = None
 
