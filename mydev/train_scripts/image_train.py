@@ -2,7 +2,7 @@ import torch as th
 # import pytorch_lightning as pl
 import lightning as L
 import sys, os, tqdm
-sys.path.append("/home/mint/Dev/RadarPointcloud/truckscenes-devkit/mydev/")
+sys.path.append("/home/mint/Dev/Radar_Pointcloud_Recon/truckscenes-devkit/mydev/")
 from guided_diffusion.dataloader.dataloader import get_truckscenes_dataset
 from guided_diffusion.dataloader.random_dataloader import get_random_dataset
 from config.base_config import parse_args
