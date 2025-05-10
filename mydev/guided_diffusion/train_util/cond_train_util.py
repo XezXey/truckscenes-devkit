@@ -406,9 +406,9 @@ class TrainLoop(LightningModule):
         all_gt = np.concatenate(all_gt, axis=0)
 
         # Save the samples
-        samples_path = os.path.join(self.cfg.training.visualization, "samples")
+        samples_path = os.path.join(self.cfg.training.visualization)
         os.makedirs(samples_path, exist_ok=True)
-        with open(os.path.join(samples_path, f"sample_{sampling_model}_{step_}.json"), 'w') as f:
+        with open(os.path.join(samples_path, f"sample_{sampling_model}_{int(step_)}.json"), 'w') as f:
             out = {
                 'pred': all_pred.tolist(),
                 'gt': all_gt.tolist(),

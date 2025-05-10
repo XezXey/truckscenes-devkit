@@ -3,6 +3,7 @@ device: 'cuda'
 
 pointcloud_model: 
     arch: 'MDM'
+    max_pc_len: 512
 
 condition_model:
     arch: 'EncoderUNetModelNoTime'
@@ -12,11 +13,11 @@ condition_model:
 training:
     batch_size: 1
     save_name: 'mdm_single_fit'
-    save_ckpt: './model_checkpoints/mdm/'
-    visualization: './training_visualization/mdm/'
+    save_ckpt: './model_checkpoints/single_fit'
+    visualization: './model_checkpoints/single_fit'
     save_interval: 10000
     save_ema_interval: 10000
-    sampling_interval: 1
+    sampling_interval: 500
     single_sample_training: True
     lr: 0.0001
 
@@ -27,5 +28,5 @@ logging:
     log_interval: 2
     visualize_log_interval: 500
     wandb_logger:
-        run_name: 'mdm_single_fit'
+        run_name: 'mdm_single_fit_512'
         tags: ['ManTruck']

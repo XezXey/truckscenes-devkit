@@ -1,0 +1,32 @@
+name: 'Radar Pointcloud Reconstruction'
+device: 'cuda'
+
+pointcloud_model: 
+    arch: 'MDM'
+    max_pc_len: 128
+
+condition_model:
+    arch: 'EncoderUNetModelNoTime'
+    apply: True
+    resize_ratio: 3.0
+
+training:
+    batch_size: 1
+    save_name: 'mdm_single_fit'
+    save_ckpt: './model_checkpoints/single_fit'
+    visualization: './model_checkpoints/single_fit'
+    save_interval: 10000
+    save_ema_interval: 10000
+    sampling_interval: 500
+    single_sample_training: True
+    lr: 0.0001
+
+dataset:
+    sample_token: 'first_sample_token'
+
+logging:
+    log_interval: 2
+    visualize_log_interval: 500
+    wandb_logger:
+        run_name: 'mdm_single_fit_128'
+        tags: ['ManTruck']
