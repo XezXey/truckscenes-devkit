@@ -219,7 +219,7 @@ class TrainLoop(LightningModule):
         img = batch['img']
         self.model(trainloop=self, dat=pc, cond=img)
         self.step += 1
-    
+
     @rank_zero_only
     def on_train_batch_end(self, outputs, batch, batch_idx):
         '''
@@ -245,7 +245,7 @@ class TrainLoop(LightningModule):
     def log_rank_zero(self, batch):
         if self.step % self.log_interval == 0:
             self.log_step()
-        if (self.step % self.sampling_interval == 0) or (self.resume_step!=0 and self.step==1) :
+        if (self.step % self.sampling_interval == 0) or (self.resume_step!=0 and self.step==1):
             self.log_sampling(batch, sampling_model='ema')
             self.log_sampling(batch, sampling_model='model')
     
@@ -416,8 +416,8 @@ class TrainLoop(LightningModule):
             json.dump(out, f)
 
         # Log the distance to wandb as a plot for each sample
-        plot_distance(all_pred, all_gt, self_obj=self, logger=self.t_logger, step=step_)
-        plot_2d(all_pred, all_gt, self_obj=self, logger=self.t_logger)
+        plot_distance(all_pred, all_gt, name=f"distance_error_{sampling_model}", step=step_)
+        plot_2d(all_pred, all_gt, name=f"projection2d_{sampling_model}", step=step_)
 
         # # Save memory!
         self.train_mode(model=sampling_model_dict)

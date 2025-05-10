@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import wandb
 
-def plot_distance(pred_batch, gt_batch, self_obj, logger, tag="distance_error", step=None):
+def plot_distance(pred_batch, gt_batch, name, step):
     """
     pred_batch, gt_batch: numpy arrays of shape (B, N, 3)
     logger: a W&B logger with a .log() method (e.g., wandb)
@@ -44,12 +44,12 @@ def plot_distance(pred_batch, gt_batch, self_obj, logger, tag="distance_error", 
     plt.tight_layout()
 
     # Log to W&B
-    wandb.log({tag: wandb.Image(fig)} if step is None else {tag: wandb.Image(fig), "step": step})
+    wandb.log({name: wandb.Image(fig)}, step=int(step))
     plt.close(fig)
 
     
 
-def plot_2d(pred_batch, gt_batch, self_obj, logger):
+def plot_2d(pred_batch, gt_batch, name, step):
     # View settings: (elev, azim, title)
     views = [
         (90, -90, "XY"),   # Top-down
@@ -77,7 +77,7 @@ def plot_2d(pred_batch, gt_batch, self_obj, logger):
                 ax.legend(loc='upper right')
 
     plt.tight_layout()
-    wandb.log({"All_Projections": wandb.Image(fig)})
+    wandb.log({name: wandb.Image(fig)}, step=int(step))
     plt.close(fig)
 
 def test_plot():
