@@ -12,6 +12,39 @@ SENSOR_PAIR_ID = {
     'RADAR_RIGHT_FRONT': 'CAMERA_RIGHT_FRONT',
 }
 
+def get_scene_tokens(trucksc, scene):
+    """
+    Get the avaliable frame tokens from the scene.
+    """
+    print("=" * 100)
+    print("[#] scene:", scene)
+    print(scene.keys())
+    count = 0
+    samples_token = [scene['first_sample_token']]
+    print("[#] First_sample_token: ", scene['first_sample_token'])
+    print("[#] Last_sample_token: ", scene['last_sample_token'])
+    start_sample = trucksc.get('sample', samples_token[0])
+    current_sample = start_sample
+    assert start_sample['prev'] == '', "[#] First sample should not have a previous sample."
+
+    while current_sample['next'] != '':
+        count += 1
+        current_sample = trucksc.get('sample', current_sample['next'])
+        samples_token.append(current_sample['token'])
+        assert current_sample['scene_token'] == scene['token'], "[#] Sample should belong to the same scene."
+    
+    samples_token.append(scene['last_sample_token'])
+    count += 1
+    assert trucksc.get('sample', samples_token[-1])['next'] == '', "[#] Last sample should not have a next sample."
+    print("[#] #count:", count)
+    print("[#] #nbr_samples: ", scene['nbr_samples'])
+    assert count == scene['nbr_samples'], "[#] Count should be equal to the number of samples in the scene."
+    print("=" * 100)
+
+    return {scene['token']: samples_token}
+
+
+
 def get_truckscenes_dataset(cfg, deterministic=True):
     """
     Load the TruckScenes dataset.
@@ -28,7 +61,15 @@ def get_truckscenes_dataset(cfg, deterministic=True):
     version = cfg.dataset.version
     dataroot = cfg.dataset.dataroot
     trucksc = TruckScenes(version=version, dataroot=dataroot, verbose=True)
+
+    # Load all the scenes
+    frames_dict = {}
+    for scene in trucksc.scene:
+        frames_dict.update(get_scene_tokens(trucksc, scene))
+
+
     ts_dataset = TruckScenesDataset(trucksc, cfg)
+
     batch_size = 1 if cfg.training.single_sample_training else cfg.training.batch_size
     
     if deterministic:
@@ -66,6 +107,7 @@ class TruckScenesDataset(Dataset):
     def __init__(self, trucksc, cfg):
         self.trucksc = trucksc
         self.cfg = cfg
+
         if cfg.training.single_sample_training:
             self.scene = trucksc.scene[:1]
         else:
@@ -73,8 +115,11 @@ class TruckScenesDataset(Dataset):
         self.sample_token = cfg.dataset.sample_token
         self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
         self.padding_value = -1000
+
+        # Configuration for image processing
         self.resize_ratio = cfg.condition_model.resize_ratio
-        # self.__getitem__(0)
+        self.normalize_image = cfg.condition_model.normalize_image
+        # if os.path.exists(cfg.dataset.pc_mean)
         
     def __len__(self):
         return len(self.scene)
@@ -90,8 +135,8 @@ class TruckScenesDataset(Dataset):
         pcl_path = os.path.join(self.trucksc.dataroot, pointsensor['filename'])
         
         # Load the point cloud
-        pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, intensity
-        pc_pts = pc.points.transpose(1, 0)
+        pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, rcs (radar cross section)
+        pc_pts = pc.points.transpose(1, 0)  # Nx7
         pc_pts = pc_pts[:, :3]  # Only keep x, y, z
         # Load the camera image
         cam_img = Image.open(os.path.join(self.trucksc.dataroot, cam['filename']))  # HxWxC
@@ -100,6 +145,9 @@ class TruckScenesDataset(Dataset):
         new_h = int(orig_h  / self.resize_ratio)
         cam_img = cam_img.resize((new_w, new_h), Image.LANCZOS)
         cam_img = np.array(cam_img)
+        if self.normalize_image:
+            # Normalize the image to [0, 1]
+            cam_img = (cam_img / 255.0).astype(np.float32)
     
         # Load the transformation matrix
         sensor2ego_record = self.trucksc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
@@ -122,15 +170,18 @@ class TruckScenesDataset(Dataset):
         }
         # print("[#] pc shape: ", pc.points.shape)
         # print("[#] cam_img shape: ", cam_img.size)
+
+        # Z-normalization
+        assert pc_pts.shape == (1, 3), f"[#] Point cloud shape is {pc_pts.shape}, expected (1, 3) for mean and std."
+        pc_pts = (pc_pts - self.pc_mean) / self.pc_std
         
         return pc_pts, cam_img, cam_dict
-        # return np.random.rand(10, 3, 256, 256)
 
     def collate_fn(self, batch):
         pc, img, cam_dict = map(list, zip(*batch))
         max_len = max([pc[i].shape[0] for i in range(len(pc))])
-        if max_len > self.cfg.training.max_pc_len:
-            max_len = self.cfg.training.max_pc_len
+        if max_len > self.cfg.pointcloud_model.max_pc_len:
+            max_len = self.cfg.pointcloud_model.max_pc_len
             
         #TODO: This can be randomly sampled from start=[0, max_len - len(pc[i])] to start + len(pc[i])
         pc = [th.tensor(pc[i][:max_len, :].copy()) for i in range(len(pc))]

@@ -36,6 +36,7 @@ cfg.condition_model.name = 'condition_model'
 cfg.condition_model.arch = 'EncoderUNetModelNoTime'
 cfg.condition_model.apply = False 
 cfg.condition_model.resize_ratio = 1.0
+cfg.condition_model.normalize_image = True
 cfg.condition_model.image_size = 512
 cfg.condition_model.in_channels = 3
 cfg.condition_model.model_channels = 128
@@ -57,7 +58,6 @@ cfg.condition_model.pool = 'adaptive'
 # Options for training
 # ---------------------------------------------------------------------------- #
 cfg.training = CN()
-cfg.training.max_pc_len = 128
 cfg.training.batch_size = 8
 cfg.training.n_gpus = 1
 cfg.training.num_nodes = 1
@@ -128,6 +128,8 @@ cfg.dataset.version = 'v1.0-mini'
 cfg.dataset.dataroot = '/data/mint/Radar_Dataset/ManTruck/man-truckscenes/'
 cfg.dataset.sample_token = "first_sample_token"
 cfg.dataset.radar_position = ['RADAR_LEFT_FRONT']
+cfg.dataset.mean = ''
+cfg.dataset.std = ''
 
 # ---------------------------------------------------------------------------- #
 # Options for Evaluation
