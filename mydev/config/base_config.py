@@ -93,7 +93,7 @@ cfg.logging.wandb_logger.notes = 'Default note...'
 cfg.logging.wandb_logger.project_name = 'Radar Pointcloud Reconstruction'
 cfg.logging.wandb_logger.tags = ['default']
 cfg.logging.wandb_logger.run_name = 'test'
-cfg.logging.wandb_logger.dir = './model_checkpoints'
+cfg.logging.wandb_logger.dir = '/data/mint/RadarPC_wandb/'
 cfg.logging.wandb_logger.run_mode = 'run'
 cfg.logging.wandb_logger.resume = None
 

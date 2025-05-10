@@ -1,13 +1,14 @@
 import copy
 import functools
 import os, glob, plotly
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import blobfile as bf
 import torch as th
 th.set_float32_matmul_precision('high')
 import numpy as np
-import tqdm
+import tqdm, json
 import torch.distributed as dist
 from torchvision.utils import make_grid
 from torch.optim import AdamW
@@ -28,6 +29,7 @@ from ..trainer_util import Trainer
 from ..models.nn import update_ema
 from ..resample import LossAwareSampler, UniformSampler
 from ..script_util import seed_all, compare_models, dump_model_params
+from ..vis_util import plot_2d, plot_distance
 import torch.nn as nn
 
 class ModelWrapper(nn.Module):
@@ -372,49 +374,51 @@ class TrainLoop(LightningModule):
 
         step_ = float(self.step + self.resume_step)
 
-        #TODO: Back to normal sampling
-        # n = self.cfg.training.n_sampling
-        # if self.cfg.training.same_sampling:
-        #     # batch here is a tuple of (dat, cond); thus used batch[0], batch[1] here
-        #     testing_scene = [self.train_dataset.__getitem__(i) for i in range(n)]
-        # else:
-        #     testing_scene = [self.train_dataset.__getitem__(i) for i in np.random.randint(0, self.train_dataset.__len__(), n)]
-            
-        pred = []
-        gt = []
+        all_pred = []
+        all_gt = []
         for i, batch in enumerate(self.train_loader):
-            # batch = self.train_loader.__getitem__(i)
             pc = batch['pc'].cuda()
             img = batch['img'].cuda()
+            # print(pc.shape, img.shape)
             cond = self.forward_cond_network(cond=img)
             cond = self.prepare_cond(cond=cond)
             
-            # print("pc shape: ", pc.shape)
-            # print("img shape: ", img.shape)
-            # print("cond shape: ", cond['cond'].shape)
-
             with th.no_grad():
-                samples, _ = self.diffusion.p_sample_loop(
+                pred, _ = self.diffusion.p_sample_loop(
                     sampling_model_dict[self.cfg.pointcloud_model.name],
-                    # shape=pc.shape, # B x T x 3
-                    shape=pc.shape,
+                    shape=pc.shape, # B x T x 3
                     noise=th.randn_like(pc).cuda(),
-                    # clip_denoised=True,
-                    clip_denoised=False,
+                    clip_denoised=False,    # Don't clip the denoised samples.
                     model_kwargs=cond,
                     progress=True,
                 )
             # print(samples.shape)    # B x T x 3
-            pred.append(samples)
-            gt.append(pc)
+            pred = pred.detach().cpu().numpy()
+            gt = pc.detach().cpu().numpy()
+            for j in range(pred.shape[0]):
+                pred[j] = self.train_dataset.inv_transform(pred[j])
+                gt[j] = self.train_dataset.inv_transform(gt[j])
+
+            all_pred.append(pred)
+            all_gt.append(gt)
         # Calculate per samples L2 loss
-        pred = th.cat(pred, dim=0)
-        gt = th.cat(gt, dim=0)
-        mse = th.mean(th.square(pred - gt), dim=(1, 2))
-        rmse = th.sqrt(mse)
+        all_pred = np.concatenate(all_pred, axis=0)
+        all_gt = np.concatenate(all_gt, axis=0)
+
+        # Save the samples
+        samples_path = os.path.join(self.cfg.training.visualization, "samples")
+        os.makedirs(samples_path, exist_ok=True)
+        with open(os.path.join(samples_path, f"sample_{sampling_model}_{step_}.json"), 'w') as f:
+            out = {
+                'pred': all_pred.tolist(),
+                'gt': all_gt.tolist(),
+            }
+            json.dump(out, f)
+
         # Log the distance to wandb as a plot for each sample
-        self.log(f"sampling/{sampling_model}-rmse", rmse.mean(),)
-        self.log(f"sampling/{sampling_model}-mse", mse.mean(),)
+        plot_distance(all_pred, all_gt, self_obj=self, logger=self.t_logger, step=step_)
+        plot_2d(all_pred, all_gt, self_obj=self, logger=self.t_logger)
+
         # # Save memory!
         self.train_mode(model=sampling_model_dict)
 

@@ -27,8 +27,8 @@ if __name__ == "__main__":
     if cfg.training.save_name is None:
         print("Please specify the save_name in the config file...")
         exit()
-    cfg.training.save_ckpt = os.path.join(cfg.training.save_ckpt, cfg.training.save_name)
-    cfg.training.visualization = os.path.join(cfg.training.visualization, cfg.training.save_name)
+    cfg.training.save_ckpt = os.path.join(cfg.training.save_ckpt, cfg.training.save_name, 'ckpt')
+    cfg.training.visualization = os.path.join(cfg.training.visualization, cfg.training.save_name, 'visualization')
     cfg.logging.wandb_logger.dir = os.path.join(cfg.logging.wandb_logger.dir, cfg.training.save_name)
     
     # Init diffusion, model and schedule sampler

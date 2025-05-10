@@ -137,7 +137,7 @@ class TruckScenesDataset(Dataset):
         self.__getitem__(0)
         
     def __len__(self):
-        return len(self.f2s_tokens)
+        return len(self.f2s_tokens_list)
     
     def get_pc_mean_sd(self):
         """
@@ -219,10 +219,30 @@ class TruckScenesDataset(Dataset):
         # print("[#] cam_img shape: ", cam_img.size)
 
         # Z-normalization
-        assert pc_pts.shape[1] == (1, 3), f"[#] Point cloud shape is {pc_pts.shape}, expected (1, 3) for mean and std."
+        assert pc_pts.shape[1] == (3), f"[#] pc_pts shape: {pc_pts.shape} should be (N, 3)"
+        assert self.pc_mean.shape == (1, 3), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, 3)"
+        assert self.pc_std.shape == (1, 3), f"[#] pc_std shape: {self.pc_std.shape} should be (1, 3)"
+
         pc_pts = (pc_pts - self.pc_mean) / self.pc_std
         
         return pc_pts, cam_img, cam_dict
+
+    def inv_transform(self, pc):
+        """
+        Inverse transform the point cloud data.
+        
+        Args:
+            pc (ndarray): Point cloud data in shape (N, 3).
+            
+        Returns:
+            ndarray: Inverse transformed point cloud data.
+        """
+        assert pc.shape[1] == (3), f"[#] pc shape: {pc.shape} should be (N, 3)"
+        assert self.pc_mean.shape == (1, 3), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, 3)"
+        assert self.pc_std.shape == (1, 3), f"[#] pc_std shape: {self.pc_std.shape} should be (1, 3)"
+
+        pc = pc * self.pc_std + self.pc_mean
+        return pc
 
     def collate_fn(self, batch):
         pc, img, cam_dict = map(list, zip(*batch))
