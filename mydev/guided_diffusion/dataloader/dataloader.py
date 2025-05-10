@@ -3,7 +3,7 @@ import torch as th
 from torch.utils.data import Dataset
 from truckscenes import TruckScenes
 from pyquaternion import Quaternion
-import os
+import os, json, datetime
 from PIL import Image
 from truckscenes.utils.data_classes import LidarPointCloud, RadarPointCloud
 
@@ -12,37 +12,38 @@ SENSOR_PAIR_ID = {
     'RADAR_RIGHT_FRONT': 'CAMERA_RIGHT_FRONT',
 }
 
-def get_scene_tokens(trucksc, scene):
-    """
-    Get the avaliable frame tokens from the scene.
-    """
+def get_scene_token(trucksc, scene):
     print("=" * 100)
     print("[#] scene:", scene)
     print(scene.keys())
-    count = 0
-    samples_token = [scene['first_sample_token']]
     print("[#] First_sample_token: ", scene['first_sample_token'])
     print("[#] Last_sample_token: ", scene['last_sample_token'])
-    start_sample = trucksc.get('sample', samples_token[0])
-    current_sample = start_sample
-    assert start_sample['prev'] == '', "[#] First sample should not have a previous sample."
+    current_token = trucksc.get('sample', scene['first_sample_token'])
+    samples_token = [current_token['token']]
+    timestamps = [current_token['timestamp']]
+    count = 1
 
-    while current_sample['next'] != '':
+    assert current_token['prev'] == '', "[#] First sample should not have a previous sample."
+
+    while current_token['next'] != '':
         count += 1
-        current_sample = trucksc.get('sample', current_sample['next'])
-        samples_token.append(current_sample['token'])
-        assert current_sample['scene_token'] == scene['token'], "[#] Sample should belong to the same scene."
+        current_token = trucksc.get('sample', current_token['next'])
+        samples_token.append(current_token['token'])
+        timestamps.append(current_token['timestamp'])
+        assert current_token['scene_token'] == scene['token'], "[#] Sample should belong to the same scene."
     
-    samples_token.append(scene['last_sample_token'])
-    count += 1
     assert trucksc.get('sample', samples_token[-1])['next'] == '', "[#] Last sample should not have a next sample."
     print("[#] #count:", count)
     print("[#] #nbr_samples: ", scene['nbr_samples'])
     assert count == scene['nbr_samples'], "[#] Count should be equal to the number of samples in the scene."
     print("=" * 100)
 
-    return {scene['token']: samples_token}
-
+    # Reverse the dict to have sample_token as key and scene_token as value
+    scene2frames_token = {scene['token']: samples_token}
+    frames2scene_token = {samples_token[i]: {'scene_token': scene['token'], 'timestamp': timestamps[i]} for i in range(len(samples_token))}
+    
+    return scene2frames_token, frames2scene_token
+    # return {scene['token']: samples_token, 'timestamps': timestamps}
 
 
 def get_truckscenes_dataset(cfg, deterministic=True):
@@ -61,11 +62,6 @@ def get_truckscenes_dataset(cfg, deterministic=True):
     version = cfg.dataset.version
     dataroot = cfg.dataset.dataroot
     trucksc = TruckScenes(version=version, dataroot=dataroot, verbose=True)
-
-    # Load all the scenes
-    frames_dict = {}
-    for scene in trucksc.scene:
-        frames_dict.update(get_scene_tokens(trucksc, scene))
 
 
     ts_dataset = TruckScenesDataset(trucksc, cfg)
@@ -108,26 +104,77 @@ class TruckScenesDataset(Dataset):
         self.trucksc = trucksc
         self.cfg = cfg
 
+        # Load all the scenes
+        self.f2s_tokens = {}
+        for scene in trucksc.scene:
+            s2f_t, f2s_t = get_scene_token(trucksc, scene)
+            self.f2s_tokens.update(f2s_t)
+
+        self.f2s_tokens_list = list(self.f2s_tokens.keys())
         if cfg.training.single_sample_training:
-            self.scene = trucksc.scene[:1]
-        else:
-            self.scene = trucksc.scene  # List of scenes
-        self.sample_token = cfg.dataset.sample_token
+            self.f2s_tokens_dict = dict(list(self.f2s_tokens.items())[:1])
+            self.f2s_tokens_list = self.f2s_tokens_list[:1]
+
         self.radar_position = cfg.dataset.radar_position[0] # Assuming only one radar position is used
         self.padding_value = -1000
 
         # Configuration for image processing
         self.resize_ratio = cfg.condition_model.resize_ratio
         self.normalize_image = cfg.condition_model.normalize_image
-        # if os.path.exists(cfg.dataset.pc_mean)
+        if not os.path.exists(f'{cfg.dataset.mean_sd_path}/mean_sd.json'):
+            print(f"[#] {cfg.dataset.mean_sd_path}/mean_sd.json does not exist. Computing it...")
+            self.pc_mean, self.pc_std = self.get_pc_mean_sd()
+        else:
+            print(f"[#] {cfg.dataset.mean_sd_path}/mean_sd.json exists. Loading it...")
+            with open(f'{cfg.dataset.mean_sd_path}/mean_sd.json', 'r') as f:
+                mean_std = json.load(f)
+                self.pc_mean = np.array(mean_std['mean'])
+                self.pc_std = np.array(mean_std['std'])
+
+        print("[#] pc_mean: ", self.pc_mean)
+        print("[#] pc_std: ", self.pc_std)
+
+        self.__getitem__(0)
         
     def __len__(self):
-        return len(self.scene)
-        # return 10
+        return len(self.f2s_tokens)
     
+    def get_pc_mean_sd(self):
+        """
+        Calculate the mean and standard deviation of the point cloud data.
+        
+        Returns:
+            tuple: Mean and standard deviation of the point cloud data.
+        """
+        all_pc = []
+
+        for i in range(len(self.f2s_tokens_list)):
+            frame_token = self.f2s_tokens_list[i]
+            sample_record = self.trucksc.get('sample', frame_token)
+            pointsensor_token = sample_record['data'][self.radar_position]
+            pointsensor = self.trucksc.get('sample_data', pointsensor_token)
+            pcl_path = os.path.join(self.trucksc.dataroot, pointsensor['filename'])
+            # Load the point cloud
+            pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, rcs (radar cross section)
+            pc_pts = pc.points.transpose(1, 0)  # Nx7
+            pc_pts = pc_pts[:, :3]  # Only keep x, y, z
+            all_pc.append(pc_pts)
+        
+        all_pc = np.concatenate(all_pc, axis=0)
+        pc_mean = np.mean(all_pc, axis=0)[None, ...]    # 1x3
+        pc_std = np.std(all_pc, axis=0)[None, ...]   # 1x3
+
+        self.cfg.dataset.mean_sd_path = self.cfg.training.save_ckpt
+        os.makedirs(self.cfg.dataset.mean_sd_path, exist_ok=True)
+        with open(f'{self.cfg.dataset.mean_sd_path}/mean_sd.json', 'w') as f:
+            print(f"[#] Saving mean and std to {self.cfg.dataset.mean_sd_path}/mean_sd.json")
+            json.dump({'mean': pc_mean.tolist(), 'std': pc_std.tolist(), 'f2s_token_used':self.f2s_tokens_list, 'datetime':datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}, f)
+        
+        return pc_mean, pc_std
+
     def __getitem__(self, idx):
-        scene = self.scene[idx]
-        sample_record = self.trucksc.get('sample', scene[self.sample_token])
+        frame_token = self.f2s_tokens_list[idx]
+        sample_record = self.trucksc.get('sample', frame_token)
         pointsensor_token = sample_record['data'][self.radar_position]
         camera_token = sample_record['data'][SENSOR_PAIR_ID[self.radar_position]]
         cam = self.trucksc.get('sample_data', camera_token)
@@ -172,7 +219,7 @@ class TruckScenesDataset(Dataset):
         # print("[#] cam_img shape: ", cam_img.size)
 
         # Z-normalization
-        assert pc_pts.shape == (1, 3), f"[#] Point cloud shape is {pc_pts.shape}, expected (1, 3) for mean and std."
+        assert pc_pts.shape[1] == (1, 3), f"[#] Point cloud shape is {pc_pts.shape}, expected (1, 3) for mean and std."
         pc_pts = (pc_pts - self.pc_mean) / self.pc_std
         
         return pc_pts, cam_img, cam_dict

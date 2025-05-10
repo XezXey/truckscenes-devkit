@@ -128,6 +128,7 @@ cfg.dataset.version = 'v1.0-mini'
 cfg.dataset.dataroot = '/data/mint/Radar_Dataset/ManTruck/man-truckscenes/'
 cfg.dataset.sample_token = "first_sample_token"
 cfg.dataset.radar_position = ['RADAR_LEFT_FRONT']
+cfg.dataset.mean_sd_path = None
 cfg.dataset.mean = ''
 cfg.dataset.std = ''
 
