@@ -129,17 +129,27 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        pe = th.zeros(max_len, d_model)
-        position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
-        div_term = th.exp(th.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = th.sin(position * div_term)
-        pe[:, 1::2] = th.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        position = th.arange(max_len).unsqueeze(1)
+        div_term = th.exp(th.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
+        pe = th.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = th.sin(position * div_term)
+        pe[:, 0, 1::2] = th.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+        # position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
+        # div_term = th.exp(th.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+
+        # pe = th.zeros(max_len, d_model)
+        # pe[:, 0::2] = th.sin(position * div_term)
+        # pe[:, 1::2] = th.cos(position * div_term)
+        # pe = pe.unsqueeze(0).transpose(0, 1)
         
-        self.register_parameter('pe', nn.Parameter(pe, requires_grad=False))
+        # self.register_parameter('pe', nn.Parameter(pe, requires_grad=False))
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x.permute(1, 0, 2)   # B x T x D -> T x B x D
+        x = x + self.pe[:x.size(0)]
+        x = x.permute(1, 0, 2)
         return self.dropout(x)
     
 

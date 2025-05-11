@@ -103,6 +103,7 @@ class TruckScenesDataset(Dataset):
     def __init__(self, trucksc, cfg):
         self.trucksc = trucksc
         self.cfg = cfg
+        self.max_pc_len = cfg.pointcloud_model.max_pc_len
 
         # Load all the scenes
         self.f2s_tokens = {}
@@ -157,7 +158,7 @@ class TruckScenesDataset(Dataset):
             # Load the point cloud
             pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, rcs (radar cross section)
             pc_pts = pc.points.transpose(1, 0)  # Nx7
-            pc_pts = pc_pts[:, :3]  # Only keep x, y, z
+            pc_pts = pc_pts[:self.max_pc_len, :3]  # Only keep x, y, z
             all_pc.append(pc_pts)
         
         all_pc = np.concatenate(all_pc, axis=0)

@@ -431,7 +431,7 @@ class TrainLoop(LightningModule):
                 filename = f"{name}_model{save_step:06d}.pt"
             else:
                 filename = f"{name}_ema_{rate}_{save_step:06d}.pt"
-            with bf.BlobFile(bf.join(get_blob_logdir(), filename), "wb") as f:
+            with bf.BlobFile(bf.join(self.cfg.training.save_ckpt, filename), "wb") as f:
                 th.save(state_dict, f)
 
         for name in self.model_dict.keys():
@@ -440,7 +440,8 @@ class TrainLoop(LightningModule):
                 save_checkpoint(rate, params, self.model_trainer_dict[name], name=name)
 
         with bf.BlobFile(
-            bf.join(get_blob_logdir(), f"opt{save_step:06d}.pt"),
+            # bf.join(get_blob_logdir(), f"opt{save_step:06d}.pt"),
+            bf.join(self.cfg.training.save_ckpt, f"opt{save_step:06d}.pt"),
             "wb",
         ) as f:
             th.save(self.opt.state_dict(), f)
