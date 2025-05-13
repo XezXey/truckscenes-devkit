@@ -54,7 +54,7 @@ class MDM(nn.Module):
         
     def forward(self, x, timesteps, **kwargs):
         """
-        x: [batch_size, nfeats, nframes], denoted x_t in the paper (input)
+        x: B x T x D, denoted x_t in the paper (input)
         timesteps: [batch_size, nframes] (input)
         """
         # Condition Embedding
@@ -98,6 +98,9 @@ class TimestepEmbedder(nn.Module):
         )
 
     def forward(self, timesteps):
+        """
+        timesteps: [batch_size] (int)
+        """
         # print("timesteps : ", timesteps)
         self.sequence_pos_encoder.pe = self.sequence_pos_encoder.pe.to(timesteps.device)
         # print("pe shape : ", self.sequence_pos_encoder.pe.shape)

@@ -857,7 +857,6 @@ class GaussianDiffusion:
         # print(x_start.device, t.device, noise.device)
         # exit()
         x_t = self.q_sample(x_start, t, noise=noise)
-        
         terms = {}
         if self.loss_type == LossType.MSE or self.loss_type == LossType.RESCALED_MSE:
             #NOTE: Forward pass happens here...    

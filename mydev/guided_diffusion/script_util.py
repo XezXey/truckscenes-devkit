@@ -7,6 +7,7 @@ from guided_diffusion.models.unet import EncoderUNetModelNoTime
 # from guided_diffusion.models.dense import DenseDDPM, AutoEncoderDPM, DenseDDPMCond
 # from guided_diffusion.models.agrol import Agrol
 from .models.mdm import MDM
+from .models.mlp import MLP
 
 NUM_CLASSES = 1000
 
@@ -38,7 +39,16 @@ def create_pointcloud_model(cfg, all_cfg=None):
             dropout=cfg.dropout,
             cfg=cfg,
         )
-
+    elif cfg.arch == 'MLP':
+        return MLP(
+            in_channels=cfg.in_channels * cfg.max_pc_len,   #NOTE: We flatten the input so it's T x 3
+            out_channels=cfg.out_channels * cfg.max_pc_len, #NOTE: We flatten the output so it's T x 3
+            num_layers=cfg.num_layers,
+            condition_dim=all_cfg.condition_model.out_channels,   # NOTE: cond_dim = EncoderUNetModelNoTime's out_channels
+            model_channels=cfg.model_channels,
+            dropout=cfg.dropout,
+            cfg=cfg,
+        )
         
     else: raise NotImplementedError
     

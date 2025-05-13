@@ -274,12 +274,19 @@ class TrainLoop(LightningModule):
         return out_cond
 
     def prepare_cond(self, cond):
+        if self.cfg.training.single_sample_training:
+            cond = th.repeat_interleave(cond, self.cfg.training.single_sample_training_expand, dim=0)
         return {'cond':cond}
     
     def forward_backward(self, dat, cond):
         '''
         dat : the pointcloud data in BxTx3
         '''
+
+        if self.cfg.training.single_sample_training:
+            dat = th.repeat_interleave(dat, self.cfg.training.single_sample_training_expand, dim=0)
+
+
         t, weights = self.schedule_sampler.sample(dat.shape[0], self.device)
         # Expand dims for broadcasting sicne we also have timestep dims e.g. (B, T, #features)
         noise = th.randn_like(dat)  # 
@@ -300,11 +307,6 @@ class TrainLoop(LightningModule):
             dataset=self.train_dataset
         )
         model_losses, _ = model_compute_losses()
-
-        if isinstance(self.schedule_sampler, LossAwareSampler):
-            self.schedule_sampler.update_with_local_losses(
-                t, model_losses["loss"].detach()
-            )
 
         # Diffusion loss
         loss = (model_losses["loss"] * weights).mean()
@@ -419,7 +421,6 @@ class TrainLoop(LightningModule):
         plot_distance(all_pred, all_gt, name=f"distance_error_{sampling_model}", step=step_)
         plot_2d(all_pred, all_gt, name=f"projection2d_{sampling_model}", step=step_)
 
-        # # Save memory!
         self.train_mode(model=sampling_model_dict)
 
     @rank_zero_only

@@ -76,6 +76,7 @@ cfg.training.save_interval = 5000 # Save model every n iterations
 cfg.training.save_ema_interval = 1000 # Save model every n iterations
 cfg.training.sampling_interval = 1000 # 
 cfg.training.single_sample_training = False
+cfg.training.single_sample_training_expand = 256
 cfg.training.eval_interval = 50 # Evaluate model on validation set every n iterations
 cfg.training.ema_rate = 0.9999
 cfg.training.resume_checkpoint = ""
