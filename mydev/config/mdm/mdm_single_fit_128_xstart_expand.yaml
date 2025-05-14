@@ -2,9 +2,8 @@ name: 'Radar Pointcloud Reconstruction'
 device: 'cuda'
 
 pointcloud_model: 
-    arch: 'MLP'
-    max_pc_len: 4
-    model_channels: 1024
+    arch: 'MDM'
+    max_pc_len: 128
 
 condition_model:
     arch: 'EncoderUNetModelNoTime'
@@ -13,14 +12,18 @@ condition_model:
 
 training:
     batch_size: 1
-    save_name: 'mlp_single_fit_4'
+    save_name: 'mdm_single_fit_128_xstart_expand'
     save_ckpt: '/data/mint/RadarPC/model_logs/single_fit/'
     visualization: '/data/mint/RadarPC/visualize_logs/single_fit'
     save_interval: 10000
     save_ema_interval: 10000
     sampling_interval: 1000
     single_sample_training: True
+    single_sample_training_expand: 128
     lr: 0.0001
+
+diffusion:
+    predict_xstart: True
 
 dataset:
     sample_token: 'first_sample_token'
@@ -29,5 +32,5 @@ logging:
     log_interval: 2
     visualize_log_interval: 500
     wandb_logger:
-        run_name: 'mlp_single_fit_4'
+        run_name: 'mdm_single_fit_128_xstart_expand'
         tags: ['ManTruck']

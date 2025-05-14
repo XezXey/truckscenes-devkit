@@ -273,8 +273,8 @@ class TrainLoop(LightningModule):
             )
         return out_cond
 
-    def prepare_cond(self, cond):
-        if self.cfg.training.single_sample_training:
+    def prepare_cond(self, cond, is_train=True):
+        if self.cfg.training.single_sample_training and is_train:
             cond = th.repeat_interleave(cond, self.cfg.training.single_sample_training_expand, dim=0)
         return {'cond':cond}
     
@@ -383,7 +383,7 @@ class TrainLoop(LightningModule):
             img = batch['img'].cuda()
             # print(pc.shape, img.shape)
             cond = self.forward_cond_network(cond=img)
-            cond = self.prepare_cond(cond=cond)
+            cond = self.prepare_cond(cond=cond, is_train=False)
             
             with th.no_grad():
                 pred, _ = self.diffusion.p_sample_loop(
