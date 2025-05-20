@@ -225,6 +225,43 @@ class TruckScenesExplorer:
         coloring = coloring[mask, :]
 
         return points, coloring, im
+    
+    def render_pointcloud_in_image_return(self,
+                                   sample_token: str,
+                                   dot_size: int = 4,
+                                   pointsensor_channel: str = 'LIDAR_LEFT',
+                                   camera_channel: str = 'CAMERA_LEFT_FRONT',
+                                   out_path: str = None,
+                                   render_intensity: bool = False,
+                                   ax: Axes = None,
+                                   cmap: str = 'viridis',
+                                   verbose: bool = True):
+        """
+        Scatter-plots a pointcloud on top of image.
+
+        Arguments:
+            sample_token: Sample token.
+            dot_size: Scatter plot dot size.
+            pointsensor_channel: RADAR or LIDAR channel name, e.g. 'LIDAR_LEFT'.
+            camera_channel: Camera channel name, e.g. 'CAM_FRONT'.
+            out_path: Optional path to save the rendered figure to disk.
+            render_intensity: Whether to render lidar intensity instead of point depth.
+            ax: Axes onto which to render.
+            verbose: Whether to display the image in a window.
+        """
+        if not isinstance(cmap, Colormap):
+            cmap = cm.get_cmap(cmap)
+
+        sample_record = self.trucksc.get('sample', sample_token)
+
+        # Here we just grab the front camera and the point sensor.
+        pointsensor_token = sample_record['data'][pointsensor_channel]
+        camera_token = sample_record['data'][camera_channel]
+
+        points, coloring, im = self.map_pointcloud_to_image(pointsensor_token, camera_token,
+                                                            render_intensity=render_intensity,
+                                                            cmap=cmap)
+        return points, coloring, im
 
     def render_pointcloud_in_image(self,
                                    sample_token: str,

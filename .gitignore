@@ -354,3 +354,4 @@ images
 scripts/test.sh
 mydev/wandb
 mydev/model_checkpoints/
+mydev/experiments/data_visualize/output
