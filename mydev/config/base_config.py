@@ -29,6 +29,7 @@ cfg.pointcloud_model.in_channels = 3
 cfg.pointcloud_model.out_channels = 3
 cfg.pointcloud_model.dropout = 0.1
 cfg.pointcloud_model.max_pc_len = 128
+cfg.pointcloud_model.norm_first = False
 
 # Conditioning model (e.g. encoder, feature extractor, etc.)
 cfg.condition_model = CN()

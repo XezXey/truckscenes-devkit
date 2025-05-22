@@ -37,6 +37,7 @@ def create_pointcloud_model(cfg, all_cfg=None):
             condition_dim=all_cfg.condition_model.out_channels,   # NOTE: cond_dim = EncoderUNetModelNoTime's out_channels
             model_channels=cfg.model_channels,
             dropout=cfg.dropout,
+            norm_first=cfg.norm_first,
             cfg=cfg,
         )
     elif cfg.arch == 'MLP':

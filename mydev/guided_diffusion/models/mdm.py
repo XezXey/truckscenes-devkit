@@ -14,6 +14,7 @@ class MDM(nn.Module):
                  num_layers=3,
                  condition_dim=2,
                  dropout=0.1,
+                 norm_first=False,
                 ):
         super().__init__()
         self.in_channels = in_channels
@@ -25,6 +26,7 @@ class MDM(nn.Module):
         self.ff_size = ff_size
         self.condition_dim = condition_dim
         self.dropout = dropout
+        self.norm_first = norm_first
         
         # Input Embedding (Processing the input e.g., project into the latent before pass through the trasnformer layer)
         self.input_process = nn.Linear(self.in_channels, self.model_channels)
@@ -46,6 +48,7 @@ class MDM(nn.Module):
                                               nhead=self.num_heads,
                                               dim_feedforward=self.ff_size,
                                               dropout=self.dropout,
+                                              norm_first=self.norm_first,
                                               batch_first=True,
                                             )
         self.mdm = nn.TransformerEncoder(mdm_layer, num_layers=self.num_layers)
