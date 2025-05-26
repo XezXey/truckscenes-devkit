@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import numpy as np
 import wandb
+from plotly.subplots import make_subplots
 
 def plot_distance(pred_batch, gt_batch, name, step):
     """
@@ -79,6 +80,124 @@ def plot_2d(pred_batch, gt_batch, name, step):
     plt.tight_layout()
     wandb.log({name: wandb.Image(fig)}, step=int(step))
     plt.close(fig)
+
+
+# Normalize velocities to unit vectors
+def unit_vectors(v):
+    norm = np.linalg.norm(v, axis=1, keepdims=True)
+    norm[norm==0] = 1
+    return v / (norm + 1e-16)
+
+def plot_2d_with_velocity(all_pred, all_gt, name="projection2d", step=0,
+                arrow_len=3, wing_len=1):
+                #  arrow_len=0.2, wing_len=0.05):
+    """
+    Simplified plotting with fixed arrow and wing lengths, correctly placing arrows in each subplot.
+
+    Parameters:
+    - all_pred, all_gt: np.ndarray of shape (N, 6) [x,y,z,vx,vy,vz]
+    - arrow_len: length of each arrow shaft (data units)
+    - wing_len: length of each wing segment (data units)
+    """
+
+    B = all_pred.shape[0]
+    for bi in range(B):
+        pred_tmp = all_pred[bi]
+        gt_tmp = all_gt[bi]
+
+        # Split positions & velocities
+        pts_pred, vel_pred = pred_tmp[:, :3], pred_tmp[:, 3:]
+        pts_gt, vel_gt     = gt_tmp[:, :3],   gt_tmp[:, 3:]
+
+        uv_pred = unit_vectors(vel_pred)
+        uv_gt   = unit_vectors(vel_gt)
+
+        projections = [(0,1), (0,2), (1,2)]
+        titles = ['XY', 'XZ', 'YZ']
+        fig = make_subplots(rows=1, cols=3, subplot_titles=titles, horizontal_spacing=0.08)
+
+        def add_arrows(xs, ys, uxs, uys, color, legend_name, legend_group, showlegend, row, col):
+            x_coords, y_coords = [], []
+            for x0, y0, ux, uy in zip(xs, ys, uxs, uys):
+                # Arrow tip
+                x_end = x0 + ux * arrow_len
+                y_end = y0 + uy * arrow_len
+                # Shaft
+                x_coords += [x0, x_end, None]
+                y_coords += [y0, y_end, None]
+                # Base of wings
+                bx = x_end - ux * wing_len
+                by = y_end - uy * wing_len
+                # Perpendicular direction
+                px, py = -uy, ux
+                # Wing endpoints
+                hx1, hy1 = bx + px * wing_len, by + py * wing_len
+                hx2, hy2 = bx - px * wing_len, by - py * wing_len
+                # Wings
+                x_coords += [x_end, hx1, None, x_end, hx2, None]
+                y_coords += [y_end, hy1, None, y_end, hy2, None]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_coords, y=y_coords,
+                    mode='lines',
+                    line=dict(width=1, color=color),
+                    name=legend_name,
+                    legendgroup=legend_group,
+                    showlegend=showlegend
+                ),
+                row=row, col=col
+            )
+
+        for idx, (i, j) in enumerate(projections):
+            col = idx + 1
+            # Points
+            fig.add_trace(go.Scatter(
+                x=pts_pred[:, i], y=pts_pred[:, j], mode='markers',
+                marker=dict(size=5, color='red'), name='Pred Points',
+                legendgroup='PredPts', showlegend=(idx==0)
+            ), row=1, col=col)
+            fig.add_trace(go.Scatter(
+                x=pts_gt[:, i], y=pts_gt[:, j], mode='markers',
+                marker=dict(size=5, color='blue'), name='GT Points',
+                legendgroup='GTPts', showlegend=(idx==0)
+            ), row=1, col=col)
+
+            # Add velocity arrows
+            add_arrows(pts_pred[:, i], pts_pred[:, j],
+                    uv_pred[:, i], uv_pred[:, j],
+                    color='red', legend_name='Pred Velocity',
+                    legend_group='PredVel', showlegend=(idx==0),
+                    row=1, col=col)
+            add_arrows(pts_gt[:, i], pts_gt[:, j],
+                    uv_gt[:, i], uv_gt[:, j],
+                    color='blue', legend_name='GT Velocity',
+                    legend_group='GTVel', showlegend=(idx==0),
+                    row=1, col=col)
+
+            # Equal scale
+            fig.update_xaxes(
+                scaleanchor = f'y{col}',
+                scaleratio  = 1,
+                row=1, col=col
+            )
+            # ensure no matching across subplots:
+            fig.update_xaxes(matches=None, row=1, col=col)
+            fig.update_yaxes(matches=None, row=1, col=col)
+
+        fig.update_layout(
+            title=f"{name} @ step {step}",
+            legend=dict(x=1.1, y=1),
+            margin=dict(l=50, r=200, t=60, b=50),
+            width=1400, height=500
+        )
+        # fig.show()
+        html = fig.to_html(include_plotlyjs="cdn")
+        wandb.log({name: wandb.Html(html)}, step=int(step))
+    # plotly.offline.plot(fig, filename=f'./wandb_vis.html', auto_open=False)
+    # wandb.log({name: wandb.Html('./wandb_vis.html')}, step=int(step))
+
+
 
 def test_plot():
     import wandb

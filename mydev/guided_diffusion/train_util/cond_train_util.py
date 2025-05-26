@@ -29,7 +29,7 @@ from ..trainer_util import Trainer
 from ..models.nn import update_ema
 from ..resample import LossAwareSampler, UniformSampler
 from ..script_util import seed_all, compare_models, dump_model_params
-from ..vis_util import plot_2d, plot_distance
+from ..vis_util import plot_2d, plot_distance, plot_2d_with_velocity
 import torch.nn as nn
 
 class ModelWrapper(nn.Module):
@@ -47,7 +47,6 @@ class ModelWrapper(nn.Module):
 
     def forward(self, trainloop, dat, cond):
         trainloop.run_step(dat, cond)
-
 
 class TrainLoop(LightningModule):
     def __init__(
@@ -419,7 +418,13 @@ class TrainLoop(LightningModule):
 
         # Log the distance to wandb as a plot for each sample
         plot_distance(all_pred, all_gt, name=f"distance_error_{sampling_model}", step=step_)
-        plot_2d(all_pred, all_gt, name=f"projection2d_{sampling_model}", step=step_)
+
+        if self.cfg.pointcloud_model.predict_velocity:
+            plot_2d_with_velocity(all_pred, all_gt, name=f"projection2d_{sampling_model}", step=step_)
+            plot_2d(all_pred[..., :3], all_gt[..., :3], name=f"PC_projection2d_{sampling_model}", step=step_)
+            plot_2d(all_pred[..., 3:], all_gt[..., 3:], name=f"V_projection2d_{sampling_model}", step=step_)
+        else:
+            plot_2d(all_pred, all_gt, name=f"projection2d_{sampling_model}", step=step_)
 
         self.train_mode(model=sampling_model_dict)
 

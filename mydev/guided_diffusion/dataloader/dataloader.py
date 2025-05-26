@@ -104,6 +104,7 @@ class TruckScenesDataset(Dataset):
         self.trucksc = trucksc
         self.cfg = cfg
         self.max_pc_len = cfg.pointcloud_model.max_pc_len
+        self.predict_velocity = cfg.pointcloud_model.predict_velocity
 
         # Load all the scenes
         self.f2s_tokens = {}
@@ -158,7 +159,10 @@ class TruckScenesDataset(Dataset):
             # Load the point cloud
             pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, rcs (radar cross section)
             pc_pts = pc.points.transpose(1, 0)  # Nx7
-            pc_pts = pc_pts[:self.max_pc_len, :3]  # Only keep x, y, z
+            if self.predict_velocity:
+                pc_pts = pc_pts[:self.max_pc_len, :6]  # Keep x, y, z, vx, vy, vz
+            else:
+                pc_pts = pc_pts[:self.max_pc_len, :3]  # Only keep x, y, z
             all_pc.append(pc_pts)
         
         all_pc = np.concatenate(all_pc, axis=0)
@@ -185,7 +189,10 @@ class TruckScenesDataset(Dataset):
         # Load the point cloud
         pc = RadarPointCloud.from_file(pcl_path)    # 7xN; 7 is x, y, z, vx, vy, vz, rcs (radar cross section)
         pc_pts = pc.points.transpose(1, 0)  # Nx7
-        pc_pts = pc_pts[:, :3]  # Only keep x, y, z
+        if self.predict_velocity:
+            pc_pts = pc_pts[:, :6]  # Keep x, y, z, vx, vy, vz
+        else:
+            pc_pts = pc_pts[:, :3]  # Only keep x, y, z
         # Load the camera image
         cam_img = Image.open(os.path.join(self.trucksc.dataroot, cam['filename']))  # HxWxC
         orig_w, orig_h = cam_img.size   # PIL’s .size is (width, height)
@@ -217,12 +224,14 @@ class TruckScenesDataset(Dataset):
             }
         }
         # print("[#] pc shape: ", pc.points.shape)
+        # print(self.pc_mean.shape, self.pc_std.shape)
         # print("[#] cam_img shape: ", cam_img.size)
 
         # Z-normalization
-        assert pc_pts.shape[1] == (3), f"[#] pc_pts shape: {pc_pts.shape} should be (N, 3)"
-        assert self.pc_mean.shape == (1, 3), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, 3)"
-        assert self.pc_std.shape == (1, 3), f"[#] pc_std shape: {self.pc_std.shape} should be (1, 3)"
+        last_dim = 3 if not self.predict_velocity else 6
+        assert pc_pts.shape[1] == (last_dim), f"[#] pc_pts shape: {pc_pts.shape} should be (N, {last_dim})"
+        assert self.pc_mean.shape == (1, last_dim), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, {last_dim})"
+        assert self.pc_std.shape == (1, last_dim), f"[#] pc_std shape: {self.pc_std.shape} should be (1, {last_dim})"
 
         pc_pts = (pc_pts - self.pc_mean) / self.pc_std
         
@@ -238,9 +247,10 @@ class TruckScenesDataset(Dataset):
         Returns:
             ndarray: Inverse transformed point cloud data.
         """
-        assert pc.shape[1] == (3), f"[#] pc shape: {pc.shape} should be (N, 3)"
-        assert self.pc_mean.shape == (1, 3), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, 3)"
-        assert self.pc_std.shape == (1, 3), f"[#] pc_std shape: {self.pc_std.shape} should be (1, 3)"
+        last_dim = 3 if not self.predict_velocity else 6
+        assert pc.shape[1] == (last_dim), f"[#] pc shape: {pc.shape} should be (N, {last_dim})"
+        assert self.pc_mean.shape == (1, last_dim), f"[#] pc_mean shape: {self.pc_mean.shape} should be (1, {last_dim})"
+        assert self.pc_std.shape == (1, last_dim), f"[#] pc_std shape: {self.pc_std.shape} should be (1, {last_dim})"
 
         pc = pc * self.pc_std + self.pc_mean
         return pc
